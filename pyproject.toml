@@ -13,4 +13,5 @@ dependencies = [
     "llama-index-llms-openai>=0.7.2",
     "llama-index-vector-stores-chroma>=0.5.5",
     "poetry>=2.3.2",
+    "python-dotenv>=1.2.2",
 ]

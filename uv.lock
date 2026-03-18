@@ -131,6 +131,7 @@ dependencies = [
     { name = "llama-index-llms-openai" },
     { name = "llama-index-vector-stores-chroma" },
     { name = "poetry" },
+    { name = "python-dotenv" },
 ]
 
 [package.metadata]
@@ -143,6 +144,7 @@ requires-dist = [
     { name = "llama-index-llms-openai", specifier = ">=0.7.2" },
     { name = "llama-index-vector-stores-chroma", specifier = ">=0.5.5" },
     { name = "poetry", specifier = ">=2.3.2" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
 ]
 
 [[package]]
