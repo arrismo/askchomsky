@@ -1,9 +1,10 @@
-from dotenv import load_dotenv
-load_dotenv()  
 import os
 import nest_asyncio
 
 nest_asyncio.apply()
+
+from dotenv import load_dotenv
+load_dotenv()  
 
 import chromadb
 from datasets import load_dataset
@@ -39,7 +40,6 @@ documents = [
             "record_id": row["record_id"],
             "section": row["section"],
             "article_title": row["article_title"],
-            "page_title": row["page_title"],
             "article_date": row["article_date"],
             "index_url": row["index_url"],
         },
@@ -49,6 +49,7 @@ documents = [
 
 # Create a Chroma vector store and index
 chroma_client = chromadb.PersistentClient(path="./chroma_db")
+
 # Create or get the Chroma collection for the Chomsky corpus
 chroma_collection = chroma_client.get_or_create_collection(name="chomsky_corpus")
 vector_store = ChromaVectorStore(chroma_collection)
