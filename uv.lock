@@ -127,7 +127,6 @@ dependencies = [
     { name = "datasets" },
     { name = "llama-index-core" },
     { name = "llama-index-embeddings-huggingface" },
-    { name = "llama-index-llms-lmstudio" },
     { name = "llama-index-llms-openai" },
     { name = "llama-index-vector-stores-chroma" },
     { name = "poetry" },
@@ -140,7 +139,6 @@ requires-dist = [
     { name = "datasets", specifier = ">=4.8.2" },
     { name = "llama-index-core", specifier = ">=0.14.18" },
     { name = "llama-index-embeddings-huggingface", specifier = ">=0.7.0" },
-    { name = "llama-index-llms-lmstudio", specifier = ">=0.5.0" },
     { name = "llama-index-llms-openai", specifier = ">=0.7.2" },
     { name = "llama-index-vector-stores-chroma", specifier = ">=0.5.5" },
     { name = "poetry", specifier = ">=2.3.2" },
@@ -749,6 +747,7 @@ dependencies = [
     { name = "griffecli" },
     { name = "griffelib" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/04/56/28a0accac339c164b52a92c6cfc45a903acc0c174caa5c1713803467b533/griffe-2.0.0.tar.gz", hash = "sha256:c68979cd8395422083a51ea7cf02f9c119d889646d99b7b656ee43725de1b80f", size = 293906, upload-time = "2026-03-23T21:06:53.402Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/94/ee21d41e7eb4f823b94603b9d40f86d3c7fde80eacc2c3c71845476dddaa/griffe-2.0.0-py3-none-any.whl", hash = "sha256:5418081135a391c3e6e757a7f3f156f1a1a746cc7b4023868ff7d5e2f9a980aa", size = 5214, upload-time = "2026-02-09T19:09:44.105Z" },
 ]
@@ -761,6 +760,7 @@ dependencies = [
     { name = "colorama" },
     { name = "griffelib" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/a4/f8/2e129fd4a86e52e58eefe664de05e7d502decf766e7316cc9e70fdec3e18/griffecli-2.0.0.tar.gz", hash = "sha256:312fa5ebb4ce6afc786356e2d0ce85b06c1c20d45abc42d74f0cda65e159f6ef", size = 56213, upload-time = "2026-03-23T21:06:54.8Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e6/ed/d93f7a447bbf7a935d8868e9617cbe1cadf9ee9ee6bd275d3040fbf93d60/griffecli-2.0.0-py3-none-any.whl", hash = "sha256:9f7cd9ee9b21d55e91689358978d2385ae65c22f307a63fb3269acf3f21e643d", size = 9345, upload-time = "2026-02-09T19:09:42.554Z" },
 ]
@@ -769,6 +769,7 @@ wheels = [
 name = "griffelib"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/06/eccbd311c9e2b3ca45dbc063b93134c57a1ccc7607c5e545264ad092c4a9/griffelib-2.0.0.tar.gz", hash = "sha256:e504d637a089f5cab9b5daf18f7645970509bf4f53eda8d79ed71cce8bd97934", size = 166312, upload-time = "2026-03-23T21:06:55.954Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/51/c936033e16d12b627ea334aaaaf42229c37620d0f15593456ab69ab48161/griffelib-2.0.0-py3-none-any.whl", hash = "sha256:01284878c966508b6d6f1dbff9b6fa607bc062d8261c5c7253cb285b06422a7f", size = 142004, upload-time = "2026-02-09T19:09:40.561Z" },
 ]
@@ -1153,18 +1154,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/4e/d0/671b23ccff255c9bce132a84ffd5a6f4541ceefdeab9c1786b08c9722f2e/llama_index_instrumentation-0.5.0.tar.gz", hash = "sha256:eeb724648b25d149de882a5ac9e21c5acb1ce780da214bda2b075341af29ad8e", size = 43831, upload-time = "2026-03-12T20:17:06.742Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c3/45/6dcaccef44e541ffa138e4b45e33e0d40ab2a7d845338483954fcf77bc75/llama_index_instrumentation-0.5.0-py3-none-any.whl", hash = "sha256:aaab83cddd9dd434278891012d8995f47a3bc7ed1736a371db90965348c56a21", size = 16444, upload-time = "2026-03-12T20:17:05.957Z" },
-]
-
-[[package]]
-name = "llama-index-llms-lmstudio"
-version = "0.5.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "llama-index-core" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/82/32/11c457889fc5610db72e35319cd5608d3b3579e9c833f09032049e6011f1/llama_index_llms_lmstudio-0.5.0.tar.gz", hash = "sha256:0e8dcc2a98d1abc5c0c578b5b11ee38cb6bb7e1b389b36b1a94b34d0f1e2d548", size = 5167, upload-time = "2026-03-12T20:26:31.585Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ef/ee/ea3260e18706109fe2189b19aae166ef55970aa3799407bba27dd18d03f2/llama_index_llms_lmstudio-0.5.0-py3-none-any.whl", hash = "sha256:5af1b91e6de7092cab1b52b3eb6ba362ca1c34d7eb59ba8f52b4b7e474ebc86c", size = 4746, upload-time = "2026-03-12T20:26:32.453Z" },
 ]
 
 [[package]]

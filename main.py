@@ -11,17 +11,18 @@ from datasets import load_dataset
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.core import Settings, VectorStoreIndex, Document, StorageContext
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.lmstudio import LMStudio
+from llama_index.llms.openai import OpenAI
 
 
-# Setup LM Studio Config
-
-llm = LMStudio(
-    model_name=os.getenv("model_name"),
-    base_url=os.getenv("base_url"),
+# Setup OpenRouter Config via OpenAI-compatible endpoint
+llm = OpenAI(
+    model="openai/gpt-oss-120b",
+    api_base="https://openrouter.ai/api/v1",
+    api_key=os.getenv("openrouter_key"),
     temperature=0.1,
-    max_tokens=512,
+    max_tokens=2512,
 )
+Settings.llm = llm
 
 
 # set the embed model
