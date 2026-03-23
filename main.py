@@ -37,6 +37,24 @@ class OpenRouterOpenAI(OpenAI):
 _index: Optional[VectorStoreIndex] = None
 
 
+def configure_langfuse() -> bool:
+    """Initialize Langfuse OTEL tracing. Returns True if configured."""
+    public_key = os.getenv("LANGFUSE_PUBLIC_KEY", "")
+    secret_key = os.getenv("LANGFUSE_SECRET_KEY", "")
+    if not public_key or public_key.startswith("pk-lf-...") or not secret_key or secret_key.startswith("sk-lf-..."):
+        return False
+    try:
+        import langfuse.otel  # Langfuse v3 OTEL setup
+        langfuse.otel.configure(
+            public_key=public_key,
+            secret_key=secret_key,
+            host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+        )
+        return True
+    except Exception:
+        return False
+
+
 def configure_models() -> None:
     openrouter_key = os.getenv("openrouter_key")
     if not openrouter_key:
