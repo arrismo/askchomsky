@@ -37,22 +37,47 @@ class OpenRouterOpenAI(OpenAI):
 _index: Optional[VectorStoreIndex] = None
 
 
-def configure_langfuse() -> bool:
-    """Initialize Langfuse OTEL tracing. Returns True if configured."""
-    public_key = os.getenv("LANGFUSE_PUBLIC_KEY", "")
-    secret_key = os.getenv("LANGFUSE_SECRET_KEY", "")
-    if not public_key or public_key.startswith("pk-lf-...") or not secret_key or secret_key.startswith("sk-lf-..."):
-        return False
+def get_langfuse_client():
+    """Return a configured Langfuse client or None if unavailable/invalid."""
+    public_key = os.getenv("LANGFUSE_PUBLIC_KEY", "").strip().strip('"').strip("'")
+    secret_key = os.getenv("LANGFUSE_SECRET_KEY", "").strip().strip('"').strip("'")
+    base_url = (
+        os.getenv("LANGFUSE_BASE_URL", "").strip().strip('"').strip("'")
+        or os.getenv("LANGFUSE_HOST", "").strip().strip('"').strip("'")
+        or "https://cloud.langfuse.com"
+    )
+
+    if (
+        not public_key
+        or public_key.startswith("pk-lf-...")
+        or not secret_key
+        or secret_key.startswith("sk-lf-...")
+    ):
+        return None
+
     try:
-        import langfuse.otel  # Langfuse v3 OTEL setup
-        langfuse.otel.configure(
+        from langfuse import Langfuse
+
+        client = Langfuse(
             public_key=public_key,
             secret_key=secret_key,
-            host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+            base_url=base_url,
+            debug=os.getenv("LANGFUSE_DEBUG", "false").lower() == "true",
         )
-        return True
-    except Exception:
-        return False
+
+        if not client.auth_check():
+            print("Langfuse auth check failed. Verify keys and LANGFUSE_BASE_URL.")
+            return None
+
+        return client
+    except Exception as exc:
+        print(f"Langfuse disabled: {exc}")
+        return None
+
+
+def configure_langfuse() -> bool:
+    """Backward-compatible bool helper used by older call sites."""
+    return get_langfuse_client() is not None
 
 
 def configure_models() -> None:
