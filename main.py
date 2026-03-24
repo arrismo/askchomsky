@@ -30,7 +30,6 @@ class OpenRouterOpenAI(OpenAI):
 
     @property
     def _tokenizer(self) -> Optional[object]:
-        # OpenRouter model ids are not in tiktoken's OpenAI model map.
         return None
 
 
