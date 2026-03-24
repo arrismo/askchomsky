@@ -1,4 +1,3 @@
-import time
 from main import get_query_engine, get_langfuse_client
 
 
@@ -19,9 +18,7 @@ def ask(question: str, query_engine) -> None:
             input=question,
         )
 
-    t0 = time.perf_counter()
     response = query_engine.query(question)
-    latency = time.perf_counter() - t0
 
     # Collect source citations
     sources = []
@@ -39,27 +36,23 @@ def ask(question: str, query_engine) -> None:
     if sources:
         print("\nSources:")
         print("\n".join(sources))
-    print(f"\n[latency: {latency:.2f}s]")
 
     if lf is not None and root_obs is not None:
         if rag_obs is not None:
             rag_obs.update(
                 output=str(response),
-                metadata={"latency_s": round(latency, 3), "sources": sources},
+                metadata={"sources": sources},
             )
             rag_obs.end()
         root_obs.update(
             output=str(response),
-            metadata={"latency_s": round(latency, 3), "sources": sources},
+            metadata={"sources": sources},
         )
         root_obs.end()
         lf.flush()
-        trace_url = lf.get_trace_url(trace_id=root_obs.trace_id)
-        if trace_url:
-            print(f"\nLangfuse trace: {trace_url}")
 
 
 if __name__ == "__main__":
     query_engine = get_query_engine(similarity_top_k=5)
-    question = "How does Chomsky connect corporate power to constraints on public discourse?"
+    question = "How does Chomsky distinguish propaganda in democratic societies versus authoritarian ones?"
     ask(question, query_engine)
