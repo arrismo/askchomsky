@@ -45,3 +45,17 @@ Notes:
 - LightRAG uses your OpenRouter key from `.env` (`openrouter_key`) for answer generation.
 - This setup uses local embeddings with `BAAI/bge-base-en-v1.5`.
 - Available query modes: `naive`, `local`, `global`, `hybrid`, `mix`.
+
+## Chainlit Visualizer
+
+Run a chat UI that shows how the answer is produced (rewrite, retrieval attempts, citations, claim verification):
+
+```bash
+source .venv/bin/activate
+chainlit run app.py
+```
+
+Optional environment variables:
+
+- `CHAINLIT_MODE` (default `hybrid`)
+- `CHAINLIT_WORKING_DIR` (default `./lightrag_store`)

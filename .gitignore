@@ -5,3 +5,5 @@ __pycache__/
 lightrag_store*/
 *.pyc
 .DS_Store
+.chainlit/
+.files/
