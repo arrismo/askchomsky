@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import random
 from typing import Any
 
 import chainlit as cl
@@ -27,18 +28,59 @@ def _has_citation_marker(text: str) -> bool:
     return bool(re.search(r"\[\d+\]", text))
 
 
-def _is_small_talk_or_greeting(text: str) -> bool:
+_INTENT_CACHE: dict[str, dict[str, Any]] = {}
+_SMALL_TALK_RESPONSES_CACHE: dict[str, list[str]] | None = None
+
+_DEFAULT_SMALL_TALK_RESPONSES: dict[str, list[str]] = {
+    "greeting": [
+        "Hi! I can answer questions about Noam Chomsky's work. Try: '{example}'",
+        "Hello! Ask me anything from the Chomsky corpus. For example: '{example}'",
+    ],
+    "thanks": [
+        "You're welcome. If you want, try: '{example}'",
+        "Happy to help. A good next question is: '{example}'",
+    ],
+    "identity": [
+        "I'm a Chomsky-focused research assistant backed by your indexed corpus. Try: '{example}'",
+    ],
+    "capabilities": [
+        "I can explain, compare, and summarize topics from Noam Chomsky's work. For example: '{example}'",
+        "I can help with theory explanations, timelines, and concept comparisons from the corpus. Try: '{example}'",
+    ],
+    "fallback": [
+        "I can help with questions about Noam Chomsky's work. Try: '{example}'",
+    ],
+}
+
+_EXAMPLE_QUESTIONS: list[str] = [
+    "What is Universal Grammar?",
+    "How did Chomsky critique behaviorism?",
+    "Compare Principles and Parameters with Minimalism.",
+    "How did Chomsky's views on language acquisition evolve over time?",
+]
+
+
+def _normalize_intent_text(text: str) -> tuple[str, list[str]]:
     lowered = text.lower().strip()
     cleaned = re.sub(r"[^a-z0-9\s]", " ", lowered)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    tokens = cleaned.split() if cleaned else []
+    return cleaned, tokens
 
+
+def _rule_based_intent_router(text: str) -> dict[str, Any] | None:
+    cleaned, tokens = _normalize_intent_text(text)
     if not cleaned:
-        return True
+        return {
+            "intent": "small_talk",
+            "confidence": 1.0,
+            "source": "rules-empty",
+            "reason": "Input is empty after normalization.",
+        }
 
-    tokens = cleaned.split()
     phrase = " ".join(tokens)
 
-    direct_matches = {
+    greeting_matches = {
         "hi",
         "hello",
         "hey",
@@ -59,10 +101,14 @@ def _is_small_talk_or_greeting(text: str) -> bool:
         "thank you",
         "thx",
     }
-    if phrase in direct_matches:
-        return True
+    if phrase in greeting_matches:
+        return {
+            "intent": "small_talk",
+            "confidence": 0.99,
+            "source": "rules-direct",
+            "reason": "Matched direct greeting/pleasantry phrase.",
+        }
 
-    # If a clear query intent is present, do not classify as small talk.
     query_markers = {
         "what",
         "why",
@@ -78,15 +124,46 @@ def _is_small_talk_or_greeting(text: str) -> bool:
         "tell",
         "about",
     }
-    if any(marker in tokens for marker in query_markers) and len(tokens) > 2:
-        return False
+    corpus_markers = {
+        "chomsky",
+        "linguistics",
+        "language",
+        "grammar",
+        "syntax",
+        "phonology",
+        "semantics",
+        "universal",
+        "theory",
+        "corpus",
+    }
+
+    has_query_intent = any(marker in tokens for marker in query_markers) or "?" in text
+    has_corpus_intent = any(marker in tokens for marker in corpus_markers)
+
+    if has_query_intent and len(tokens) >= 4:
+        return {
+            "intent": "corpus_question",
+            "confidence": 0.95 if has_corpus_intent else 0.8,
+            "source": "rules-query",
+            "reason": "Detected clear query structure.",
+        }
 
     greeting_heads = {"hi", "hello", "hey", "hiya", "yo", "greetings", "howdy"}
     if tokens[0] in greeting_heads and len(tokens) <= 4:
-        return True
+        return {
+            "intent": "small_talk",
+            "confidence": 0.95,
+            "source": "rules-head",
+            "reason": "Greeting head token in a short message.",
+        }
 
     if len(tokens) <= 3 and all(t in {"hi", "hello", "hey", "yo"} for t in tokens):
-        return True
+        return {
+            "intent": "small_talk",
+            "confidence": 0.95,
+            "source": "rules-short",
+            "reason": "Short multi-token greeting.",
+        }
 
     if len(tokens) <= 4 and tuple(tokens[:2]) in {
         ("good", "morning"),
@@ -94,9 +171,173 @@ def _is_small_talk_or_greeting(text: str) -> bool:
         ("good", "evening"),
         ("good", "day"),
     }:
-        return True
+        return {
+            "intent": "small_talk",
+            "confidence": 0.95,
+            "source": "rules-timeofday",
+            "reason": "Time-of-day greeting in short message.",
+        }
 
-    return False
+    return None
+
+
+async def _classify_intent_with_llm(text: str) -> dict[str, Any] | None:
+    router_prompt = (
+        "Classify the user message intent for a Chomsky Q&A app. "
+        "Return strict JSON only with keys: intent, confidence, reason. "
+        "intent must be one of: small_talk, corpus_question, other. "
+        "confidence must be a number from 0 to 1.\n\n"
+        f"Message: {text}"
+    )
+
+    try:
+        response = await llm_model_func(
+            router_prompt,
+            system_prompt=(
+                "You are an intent router. Output JSON only, no markdown. "
+                "Prefer corpus_question when the user asks for factual content."
+            ),
+            history_messages=[],
+        )
+        parsed = _extract_json_object(str(response))
+        if not parsed:
+            return None
+
+        raw_intent = str(parsed.get("intent", "other")).strip().lower()
+        if raw_intent not in {"small_talk", "corpus_question", "other"}:
+            raw_intent = "other"
+
+        try:
+            confidence = float(parsed.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        confidence = max(0.0, min(1.0, confidence))
+
+        reason = str(parsed.get("reason", "")).strip() or "LLM classification"
+        return {
+            "intent": raw_intent,
+            "confidence": confidence,
+            "source": "llm",
+            "reason": reason,
+        }
+    except Exception:
+        return None
+
+
+async def _detect_intent(text: str) -> dict[str, Any]:
+    cache_key, _ = _normalize_intent_text(text)
+    if cache_key in _INTENT_CACHE:
+        cached = dict(_INTENT_CACHE[cache_key])
+        cached["source"] = f"{cached.get('source', 'cache')}-cache"
+        return cached
+
+    rule_decision = _rule_based_intent_router(text)
+    if rule_decision and float(rule_decision.get("confidence", 0.0)) >= 0.9:
+        _INTENT_CACHE[cache_key] = rule_decision
+        return rule_decision
+
+    llm_decision = await _classify_intent_with_llm(text)
+    if llm_decision is not None:
+        _INTENT_CACHE[cache_key] = llm_decision
+        return llm_decision
+
+    if rule_decision is not None:
+        fallback_rule = dict(rule_decision)
+        fallback_rule["source"] = f"{fallback_rule.get('source', 'rules')}-fallback"
+        _INTENT_CACHE[cache_key] = fallback_rule
+        return fallback_rule
+
+    fallback = {
+        "intent": "corpus_question",
+        "confidence": 0.5,
+        "source": "default-fallback",
+        "reason": "No classifier result; defaulting to corpus query route.",
+    }
+    _INTENT_CACHE[cache_key] = fallback
+    return fallback
+
+
+def _small_talk_bucket(text: str) -> str:
+    cleaned, tokens = _normalize_intent_text(text)
+    phrase = " ".join(tokens)
+
+    if any(t in {"thanks", "thank", "thx"} for t in tokens):
+        return "thanks"
+    if phrase in {"who are you", "what are you"}:
+        return "identity"
+
+    capability_hints = {"help", "can", "do", "able", "support", "features"}
+    if any(t in capability_hints for t in tokens):
+        return "capabilities"
+
+    if cleaned:
+        return "greeting"
+    return "fallback"
+
+
+def _load_small_talk_responses() -> dict[str, list[str]]:
+    responses = {k: list(v) for k, v in _DEFAULT_SMALL_TALK_RESPONSES.items()}
+    raw = os.getenv("SMALL_TALK_RESPONSES_JSON", "").strip()
+    if not raw:
+        return responses
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return responses
+
+    if not isinstance(parsed, dict):
+        return responses
+
+    for key, value in parsed.items():
+        bucket = str(key).strip().lower()
+        if bucket not in responses:
+            continue
+        if isinstance(value, list):
+            cleaned = [str(item).strip() for item in value if str(item).strip()]
+            if cleaned:
+                responses[bucket] = cleaned
+
+    return responses
+
+
+def _get_small_talk_responses() -> dict[str, list[str]]:
+    global _SMALL_TALK_RESPONSES_CACHE
+    if _SMALL_TALK_RESPONSES_CACHE is None:
+        _SMALL_TALK_RESPONSES_CACHE = _load_small_talk_responses()
+    return _SMALL_TALK_RESPONSES_CACHE
+
+
+async def _build_small_talk_response(text: str) -> str:
+    bucket = _small_talk_bucket(text)
+    example = random.choice(_EXAMPLE_QUESTIONS)
+
+    use_llm = os.getenv("SMALL_TALK_USE_LLM", "false").lower() == "true"
+    if use_llm:
+        prompt = (
+            "Write a short, friendly reply for a Chomsky Q&A assistant. "
+            "User sent small talk, not a factual query. "
+            "Reply in 1-2 sentences and include one concrete example question the user can ask next. "
+            "No markdown.\n\n"
+            f"User message: {text}\n"
+            f"Suggested example: {example}"
+        )
+        try:
+            generated = await llm_model_func(
+                prompt,
+                system_prompt="You are a concise assistant that redirects small talk into useful questions.",
+                history_messages=[],
+            )
+            candidate = str(generated).strip()
+            if candidate:
+                return candidate
+        except Exception:
+            pass
+
+    responses = _get_small_talk_responses()
+    options = responses.get(bucket) or responses.get("fallback") or ["Ask a Chomsky-related question."]
+    template = random.choice(options)
+    return template.format(example=example)
 
 
 def _extract_json_object(text: str) -> dict[str, Any] | None:
@@ -302,12 +543,19 @@ async def on_chat_start() -> None:
 async def on_message(message: cl.Message) -> None:
     question = message.content.strip()
 
-    if _is_small_talk_or_greeting(question):
+    async with cl.Step(name="Intent Router") as step:
+        intent_decision = await _detect_intent(question)
+        step.output = (
+            f"intent={intent_decision.get('intent', 'other')}\n"
+            f"confidence={float(intent_decision.get('confidence', 0.0)):.2f}\n"
+            f"source={intent_decision.get('source', 'unknown')}\n"
+            f"reason={intent_decision.get('reason', '')}"
+        )
+
+    if intent_decision.get("intent") == "small_talk":
+        small_talk_reply = await _build_small_talk_response(question)
         await cl.Message(
-            content=(
-                "Hi! Ask me a question about Noam Chomsky's work, "
-                "for example: 'What is Universal Grammar?'"
-            )
+            content=small_talk_reply
         ).send()
         return
 
