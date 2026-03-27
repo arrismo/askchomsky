@@ -52,8 +52,13 @@ Run a chat UI that shows how the answer is produced (rewrite, retrieval attempts
 
 ```bash
 source .venv/bin/activate
-chainlit run app.py
+.venv/bin/python run_chainlit.py --target app.py --host 127.0.0.1 --port 8000
 ```
+
+Note:
+
+- On Python 3.14, `chainlit run ...` can fail due to `nest_asyncio` event loop issues.
+- `run_chainlit.py` starts Chainlit without that patch and is the recommended entrypoint for this repo.
 
 Optional environment variables:
 
