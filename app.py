@@ -27,6 +27,78 @@ def _has_citation_marker(text: str) -> bool:
     return bool(re.search(r"\[\d+\]", text))
 
 
+def _is_small_talk_or_greeting(text: str) -> bool:
+    lowered = text.lower().strip()
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", lowered)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    if not cleaned:
+        return True
+
+    tokens = cleaned.split()
+    phrase = " ".join(tokens)
+
+    direct_matches = {
+        "hi",
+        "hello",
+        "hey",
+        "hiya",
+        "greetings",
+        "good day",
+        "yo",
+        "sup",
+        "what s up",
+        "howdy",
+        "good morning",
+        "good afternoon",
+        "good evening",
+        "how are you",
+        "how r u",
+        "who are you",
+        "thanks",
+        "thank you",
+        "thx",
+    }
+    if phrase in direct_matches:
+        return True
+
+    # If a clear query intent is present, do not classify as small talk.
+    query_markers = {
+        "what",
+        "why",
+        "how",
+        "when",
+        "where",
+        "which",
+        "explain",
+        "describe",
+        "analyze",
+        "compare",
+        "difference",
+        "tell",
+        "about",
+    }
+    if any(marker in tokens for marker in query_markers) and len(tokens) > 2:
+        return False
+
+    greeting_heads = {"hi", "hello", "hey", "hiya", "yo", "greetings", "howdy"}
+    if tokens[0] in greeting_heads and len(tokens) <= 4:
+        return True
+
+    if len(tokens) <= 3 and all(t in {"hi", "hello", "hey", "yo"} for t in tokens):
+        return True
+
+    if len(tokens) <= 4 and tuple(tokens[:2]) in {
+        ("good", "morning"),
+        ("good", "afternoon"),
+        ("good", "evening"),
+        ("good", "day"),
+    }:
+        return True
+
+    return False
+
+
 def _extract_json_object(text: str) -> dict[str, Any] | None:
     match = re.search(r"\{[\s\S]*\}", text)
     if not match:
@@ -229,6 +301,16 @@ async def on_chat_start() -> None:
 @cl.on_message
 async def on_message(message: cl.Message) -> None:
     question = message.content.strip()
+
+    if _is_small_talk_or_greeting(question):
+        await cl.Message(
+            content=(
+                "Hi! Ask me a question about Noam Chomsky's work, "
+                "for example: 'What is Universal Grammar?'"
+            )
+        ).send()
+        return
+
     mode = os.getenv("CHAINLIT_MODE", "hybrid")
     working_dir = os.getenv("CHAINLIT_WORKING_DIR", DEFAULT_WORKING_DIR)
 
