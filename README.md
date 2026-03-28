@@ -4,8 +4,8 @@ AskChomsky is a retrieval-augmented chatbot over a Noam Chomsky corpus.
 
 ## Tools Used
 
+- LightRAG (retrieval-augmented generation)
 - LlamaIndex (RAG orchestration)
-- ChromaDB (local vector database)
 - HuggingFace embeddings: `BAAI/bge-base-en-v1.5`
 - Model for answer generation: `openai/gpt-oss-120b`
 - Langfuse (observability and traces)
@@ -21,10 +21,6 @@ AskChomsky is a retrieval-augmented chatbot over a Noam Chomsky corpus.
 	- `article_title`
 	- `article_date`
 	- `index_url`
-
-## LightRAG
-
-This repo includes a LightRAG pipeline integrated into `main.py` and `ask.py`.
 
 ### 1) Index the corpus
 

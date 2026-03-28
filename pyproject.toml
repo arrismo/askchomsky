@@ -5,14 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "chromadb>=1.5.5",
     "datasets>=4.8.2",
     "langfuse>=4.0.1",
     "lightrag-hku>=1.4.11",
     "llama-index-core>=0.14.18",
     "llama-index-embeddings-huggingface>=0.7.0",
     "llama-index-llms-openai>=0.7.2",
-    "llama-index-vector-stores-chroma>=0.5.5",
     "numpy>=2.4.3",
     "poetry>=2.3.2",
     "python-dotenv>=1.2.2",

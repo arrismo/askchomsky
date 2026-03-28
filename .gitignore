@@ -24,7 +24,6 @@ build/
 *.egg
 
 # ── RAG / vector stores (can be large and contain indexed private data) ───
-chroma_db/
 lightrag_store*/
 
 # ── Generated files ──────────────────────────────────────────────────────
