@@ -458,48 +458,52 @@ async def _stream_pipeline(question: str) -> AsyncGenerator[str, None]:
             "rag_init", "Loading RAG Store", "done", detail=f"Store: {working_dir}"
         )
 
-        # ── Stage: Retrieval (with retries) ──────────────────────────────
+        # ── Stage: Retrieval (with retries, data only — no LLM) ──────────
         mode = os.getenv("CHAINLIT_MODE", "hybrid")
         attempt_modes = [mode, mode, "mix"] if mode != "mix" else ["mix", "mix"]
-        selected_result: dict[str, Any] | None = None
-        answer_text = ""
-        last_retrieval_id = "retrieval_1"
+        selected_data: dict[str, Any] | None = None
+        references: list[dict[str, str]] = []
+        chunks: list[dict[str, Any]] = []
+        final_param: QueryParam | None = None
 
         for retry_level, attempt_mode in enumerate(attempt_modes):
             stage_id = f"retrieval_{retry_level + 1}"
-            last_retrieval_id = stage_id
             param = _dynamic_query_param(attempt_mode, question, rewritten, retry_level)
+            label = (
+                "Retrieval" if retry_level == 0 else f"Retrieval (retry {retry_level})"
+            )
             yield _stage_event(
                 stage_id,
-                f"Retrieval {'(retry)' if retry_level > 0 else ''}".strip(),
+                label,
                 "running",
                 detail=f"mode: {param.mode}\ntop_k: {param.top_k}\nchunk_top_k: {param.chunk_top_k}\nrerank: {param.enable_rerank}",
             )
-            result = await rag.aquery_llm(
-                rewritten,
-                param=param,
-                system_prompt=CITATION_SYSTEM_PROMPT,
-            )
-            answer_text = _extract_llm_text(result)
-            references = _extract_references(result)
-            chunks = _extract_chunks(result)
-            selected_result = result
+            data_result = await rag.aquery_data(rewritten, param=param)
+            refs = _extract_references(data_result)
+            cks = _extract_chunks(data_result)
             yield _stage_event(
                 stage_id,
-                f"Retrieval {'(retry)' if retry_level > 0 else ''}".strip(),
+                label,
                 "done",
-                detail=f"answer chars: {len(answer_text)}\nreferences: {len(references)}\nchunks: {len(chunks)}",
+                detail=f"references: {len(refs)}\nchunks: {len(cks)}",
                 extra={"attempt": retry_level + 1},
             )
-            if answer_text and not _looks_like_no_answer(answer_text):
+            # Accept this attempt if we got chunks or references
+            if refs or cks:
+                selected_data = data_result
+                references = refs
+                chunks = cks
+                final_param = param
                 break
+            # Keep going on next retry
+            selected_data = data_result
+            references = refs
+            chunks = cks
+            final_param = param
 
-        if selected_result is None or not answer_text:
+        if not final_param:
             yield _stage_event(
-                "answer",
-                "Answer",
-                "error",
-                detail="No answer could be retrieved from the corpus.",
+                "answer", "Answer", "error", detail="No data retrieved from the corpus."
             )
             yield _sse(
                 "done",
@@ -509,17 +513,64 @@ async def _stream_pipeline(question: str) -> AsyncGenerator[str, None]:
             )
             return
 
-        answer_text = _extract_llm_text(selected_result)
-        references = _extract_references(selected_result)
-        chunks = _extract_chunks(selected_result)
-
-        # ── Stage: Citation Enforcement ───────────────────────────────────
+        # ── Stage: Citation Enforcement (pre-answer, sources only) ───────
         yield _stage_event("citations", "Citation Enforcement", "running")
-        answer_with_citations = _enforce_citation_answer(answer_text, references)
         sources_text = _render_references(references) or "No references returned."
         yield _stage_event(
             "citations", "Citation Enforcement", "done", detail=sources_text
         )
+
+        # ── Stage: Answer — stream tokens live ───────────────────────────
+        yield _stage_event("answer", "Answer", "running", detail="")
+
+        stream_param = _dynamic_query_param(
+            final_param.mode,
+            question,
+            rewritten,
+            retry_level=0,
+        )
+        stream_param.stream = True
+
+        stream_result = await rag.aquery_llm(
+            rewritten,
+            param=stream_param,
+            system_prompt=CITATION_SYSTEM_PROMPT,
+        )
+
+        llm_meta = stream_result.get("llm_response", {})
+        full_answer = ""
+
+        if llm_meta.get("is_streaming") and llm_meta.get("response_iterator"):
+            async for token in llm_meta["response_iterator"]:
+                if token:
+                    full_answer += token
+                    yield _sse("token", {"token": token})
+        else:
+            # Fallback: non-streaming content
+            full_answer = str(llm_meta.get("content") or "")
+            if full_answer:
+                yield _sse("token", {"token": full_answer})
+
+        if not full_answer or _looks_like_no_answer(full_answer):
+            yield _stage_event(
+                "answer",
+                "Answer",
+                "error",
+                detail="Could not generate an answer from the retrieved context.",
+            )
+            yield _sse(
+                "done",
+                {
+                    "answer": "I do not have enough information to answer from the retrieved corpus."
+                },
+            )
+            return
+
+        # Apply citation enforcement to the completed streamed answer
+        answer_with_citations = _enforce_citation_answer(full_answer, references)
+        suffix = ""
+        if sources_text and sources_text != "No references returned.":
+            suffix = f"\n\n{sources_text}"
 
         # ── Stage: Claim Verification ────────────────────────────────────
         yield _stage_event("verification", "Claim Verification", "running")
@@ -531,10 +582,11 @@ async def _stream_pipeline(question: str) -> AsyncGenerator[str, None]:
             detail=verification or "All claims supported.",
         )
 
-        # ── Final answer ─────────────────────────────────────────────────
-        final = f"{answer_with_citations}"
+        # Build final answer string (sources + verification appended)
+        final = answer_with_citations + suffix
         if verification:
             final += f"\n\n---\n**Claim Verification:** {verification}"
+
         yield _stage_event("answer", "Answer", "done", detail=final)
         yield _sse("done", {"answer": final})
 

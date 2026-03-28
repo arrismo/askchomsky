@@ -9,7 +9,7 @@ import { useQueryStream } from "@/hooks/useQueryStream";
 const FlowCanvas = dynamic(() => import("@/components/FlowCanvas"), { ssr: false });
 
 export default function Home() {
-  const { nodes, answer, streaming, error, submit, reset } = useQueryStream();
+  const { nodes, answer, streamingAnswer, streaming, error, submit, reset } = useQueryStream();
 
   const handleSubmit = (question: string) => {
     reset();
@@ -64,24 +64,37 @@ export default function Home() {
             <h2 className="text-sm font-semibold text-zinc-300">Answer</h2>
           </div>
           <div className="flex-1 overflow-y-auto px-5 py-4">
-            {streaming && !answer && (
+            {/* Spinner only while pipeline stages run, before tokens start */}
+            {streaming && !streamingAnswer && !answer && (
               <div className="flex items-center gap-2 text-zinc-500 text-sm">
                 <span className="w-3 h-3 rounded-full border-2 border-zinc-600 border-t-blue-400 animate-spin" />
                 Thinking…
               </div>
             )}
+
             {error && (
               <div className="rounded-xl bg-red-950/50 border border-red-800 p-4 text-sm text-red-300">
                 <p className="font-semibold mb-1">Error</p>
                 <p className="font-mono text-xs">{error}</p>
               </div>
             )}
+
+            {/* Live token stream — plain text while streaming */}
+            {streamingAnswer && !answer && !error && (
+              <div className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                {streamingAnswer}
+                <span className="inline-block w-0.5 h-3.5 bg-indigo-400 ml-0.5 align-middle animate-pulse" />
+              </div>
+            )}
+
+            {/* Final answer with full markdown once streaming is done */}
             {answer && !error && (
               <div className="text-sm text-zinc-300 leading-relaxed [&>p]:mb-3 [&>h1]:text-base [&>h1]:font-bold [&>h1]:text-zinc-100 [&>h1]:mb-2 [&>h2]:text-sm [&>h2]:font-semibold [&>h2]:text-zinc-200 [&>h2]:mb-2 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:text-zinc-300 [&>h3]:mb-1 [&>ul]:list-disc [&>ul]:pl-4 [&>ul]:mb-3 [&>ul>li]:mb-1 [&>ol]:list-decimal [&>ol]:pl-4 [&>ol]:mb-3 [&>ol>li]:mb-1 [&>hr]:border-zinc-700 [&>hr]:my-4 [&>strong]:text-zinc-100 [&>blockquote]:border-l-2 [&>blockquote]:border-zinc-600 [&>blockquote]:pl-3 [&>blockquote]:text-zinc-400 [&>blockquote]:italic [&>code]:bg-zinc-800 [&>code]:px-1 [&>code]:rounded [&>code]:text-xs [&>code]:font-mono">
                 <ReactMarkdown>{answer}</ReactMarkdown>
               </div>
             )}
-            {!streaming && !answer && !error && (
+
+            {!streaming && !answer && !error && !streamingAnswer && (
               <p className="text-zinc-600 text-sm">
                 The answer will appear here once the pipeline finishes.
               </p>

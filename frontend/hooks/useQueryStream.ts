@@ -21,6 +21,7 @@ const DEFAULT_NODES: NodeState[] = [
 export function useQueryStream() {
   const [nodes, setNodes] = useState<NodeState[]>(DEFAULT_NODES);
   const [answer, setAnswer] = useState<string>("");
+  const [streamingAnswer, setStreamingAnswer] = useState<string>("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string>("");
   const abortRef = useRef<AbortController | null>(null);
@@ -28,6 +29,7 @@ export function useQueryStream() {
   const reset = useCallback(() => {
     setNodes(DEFAULT_NODES.map((n) => ({ ...n, status: "idle", detail: "" })));
     setAnswer("");
+    setStreamingAnswer("");
     setError("");
   }, []);
 
@@ -86,8 +88,11 @@ export function useQueryStream() {
                 const parsed = JSON.parse(raw);
                 if (currentEvent === "stage") {
                   updateNode(parsed as StageEvent);
+                } else if (currentEvent === "token") {
+                  setStreamingAnswer((prev) => prev + (parsed.token ?? ""));
                 } else if (currentEvent === "done") {
                   setAnswer(parsed.answer ?? "");
+                  setStreamingAnswer("");
                 } else if (currentEvent === "error") {
                   setError(parsed.message ?? "Unknown error");
                 }
@@ -109,5 +114,5 @@ export function useQueryStream() {
     [reset, updateNode]
   );
 
-  return { nodes, answer, streaming, error, submit, reset };
+  return { nodes, answer, streamingAnswer, streaming, error, submit, reset };
 }
