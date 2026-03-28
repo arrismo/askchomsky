@@ -335,7 +335,11 @@ async def _build_small_talk_response(text: str) -> str:
             pass
 
     responses = _get_small_talk_responses()
-    options = responses.get(bucket) or responses.get("fallback") or ["Ask a Chomsky-related question."]
+    options = (
+        responses.get(bucket)
+        or responses.get("fallback")
+        or ["Ask a Chomsky-related question."]
+    )
     template = random.choice(options)
     return template.format(example=example)
 
@@ -372,6 +376,16 @@ def _extract_llm_text(raw_result: dict[str, Any]) -> str:
     if content is None:
         return ""
     return str(content)
+
+
+def _format_trace_sections(sections: list[tuple[str, str]]) -> str:
+    parts: list[str] = []
+    for name, details in sections:
+        cleaned_details = str(details).strip()
+        if not cleaned_details:
+            continue
+        parts.append(f"#### {name}\n{cleaned_details}")
+    return "\n\n".join(parts)
 
 
 def _render_references(references: list[dict[str, str]]) -> str:
@@ -519,7 +533,9 @@ async def _verify_claims(answer_text: str, chunks: list[dict[str, Any]]) -> str:
         if not isinstance(unsupported_claims, list) or not unsupported_claims:
             return f"Verdict: {verdict}."
 
-        cleaned_claims = [str(c).strip() for c in unsupported_claims if str(c).strip()][:5]
+        cleaned_claims = [str(c).strip() for c in unsupported_claims if str(c).strip()][
+            :5
+        ]
         if not cleaned_claims:
             return f"Verdict: {verdict}."
 
@@ -542,21 +558,26 @@ async def on_chat_start() -> None:
 @cl.on_message
 async def on_message(message: cl.Message) -> None:
     question = message.content.strip()
+    trace_sections: list[tuple[str, str]] = []
 
     async with cl.Step(name="Intent Router") as step:
         intent_decision = await _detect_intent(question)
-        step.output = (
+        intent_summary = (
             f"intent={intent_decision.get('intent', 'other')}\n"
             f"confidence={float(intent_decision.get('confidence', 0.0)):.2f}\n"
             f"source={intent_decision.get('source', 'unknown')}\n"
             f"reason={intent_decision.get('reason', '')}"
         )
+        step.output = intent_summary
+    trace_sections.append(("Intent Router", intent_summary))
 
     if intent_decision.get("intent") == "small_talk":
         small_talk_reply = await _build_small_talk_response(question)
-        await cl.Message(
-            content=small_talk_reply
-        ).send()
+        trace_text = _format_trace_sections(trace_sections)
+        content = small_talk_reply
+        if trace_text:
+            content = f"{content}\n\n---\n### Trace\n\n{trace_text}"
+        await cl.Message(content=content).send()
         return
 
     mode = os.getenv("CHAINLIT_MODE", "hybrid")
@@ -568,7 +589,9 @@ async def on_message(message: cl.Message) -> None:
     try:
         async with cl.Step(name="Query Rewrite") as step:
             rewritten_question = await _rewrite_query_for_retrieval(question)
-            step.output = f"Original: {question}\nRewritten: {rewritten_question}"
+            rewrite_summary = f"Original: {question}\nRewritten: {rewritten_question}"
+            step.output = rewrite_summary
+        trace_sections.append(("Query Rewrite", rewrite_summary))
 
         rag = await initialize_rag(working_dir)
 
@@ -583,10 +606,11 @@ async def on_message(message: cl.Message) -> None:
             )
 
             async with cl.Step(name=f"Retrieval Attempt {retry_level + 1}") as step:
-                step.input = (
+                retrieval_input = (
                     f"mode={param.mode}, top_k={param.top_k}, chunk_top_k={param.chunk_top_k}, "
                     f"rerank={param.enable_rerank}"
                 )
+                step.input = retrieval_input
 
                 result = await rag.aquery_llm(
                     rewritten_question,
@@ -598,17 +622,30 @@ async def on_message(message: cl.Message) -> None:
                 chunks = _extract_chunks(result)
 
                 selected_result = result
-                step.output = (
+                retrieval_output = (
                     f"answer_chars={len(answer_text)}\n"
                     f"references={len(references)}\n"
                     f"chunks={len(chunks)}"
                 )
+                step.output = retrieval_output
+            trace_sections.append(
+                (
+                    f"Retrieval Attempt {retry_level + 1}",
+                    f"{retrieval_input}\n{retrieval_output}",
+                )
+            )
 
-                if answer_text and not _looks_like_no_answer(answer_text):
-                    break
+            if answer_text and not _looks_like_no_answer(answer_text):
+                break
 
         if selected_result is None:
-            await cl.Message(content="I do not have enough information to answer from the retrieved corpus.").send()
+            trace_text = _format_trace_sections(trace_sections)
+            content = (
+                "I do not have enough information to answer from the retrieved corpus."
+            )
+            if trace_text:
+                content = f"{content}\n\n---\n### Trace\n\n{trace_text}"
+            await cl.Message(content=content).send()
             return
 
         answer_text = _extract_llm_text(selected_result)
@@ -617,17 +654,31 @@ async def on_message(message: cl.Message) -> None:
 
         async with cl.Step(name="Citation Enforcement") as step:
             answer_with_citations = _enforce_citation_answer(answer_text, references)
-            step.output = _render_references(references) or "No references returned."
+            citation_summary = (
+                _render_references(references) or "No references returned."
+            )
+            step.output = citation_summary
+        trace_sections.append(("Citation Enforcement", citation_summary))
 
         async with cl.Step(name="Claim Verification") as step:
             verification_summary = await _verify_claims(answer_with_citations, chunks)
             step.output = verification_summary
+        trace_sections.append(
+            ("Claim Verification", verification_summary or "No verification summary.")
+        )
 
         final_answer = f"{answer_with_citations}\n\nClaim verification:\n{verification_summary}".strip()
+        trace_text = _format_trace_sections(trace_sections)
+        if trace_text:
+            final_answer = f"{final_answer}\n\n---\n### Trace\n\n{trace_text}"
         await cl.Message(content=final_answer).send()
 
     except Exception as exc:
-        await cl.Message(content=f"Error: {exc}").send()
+        trace_text = _format_trace_sections(trace_sections)
+        content = f"Error: {exc}"
+        if trace_text:
+            content = f"{content}\n\n---\n### Trace\n\n{trace_text}"
+        await cl.Message(content=content).send()
     finally:
         if rag is not None:
             await rag.finalize_storages()

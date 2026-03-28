@@ -1,9 +1,47 @@
+# ── Secrets & environment ─────────────────────────────────────────────────
 .env
+.env.*
+!.env.example        # allow a committed example template
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials.json
+
+# ── Python ────────────────────────────────────────────────────────────────
 .venv/
-chroma_db/
 __pycache__/
-lightrag_store*/
 *.pyc
-.DS_Store
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+*.egg
+
+# ── RAG / vector stores (can be large and contain indexed private data) ───
+chroma_db/
+lightrag_store*/
+
+# ── Chainlit ──────────────────────────────────────────────────────────────
 .chainlit/
 .files/
+
+# ── Next.js / Node ────────────────────────────────────────────────────────
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/.env.local
+frontend/.env.*.local
+
+# ── OS & editor ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
