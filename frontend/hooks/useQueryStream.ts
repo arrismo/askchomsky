@@ -24,6 +24,7 @@ export function useQueryStream() {
   const [streamingAnswer, setStreamingAnswer] = useState<string>("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string>("");
+   const [followUps, setFollowUps] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   const reset = useCallback(() => {
@@ -31,6 +32,7 @@ export function useQueryStream() {
     setAnswer("");
     setStreamingAnswer("");
     setError("");
+     setFollowUps([]);
   }, []);
 
   const updateNode = useCallback((event: StageEvent) => {
@@ -93,8 +95,20 @@ export function useQueryStream() {
                 } else if (currentEvent === "done") {
                   setAnswer(parsed.answer ?? "");
                   setStreamingAnswer("");
+                  const f = parsed.follow_up_questions;
+                  if (Array.isArray(f)) {
+                    setFollowUps(
+                      f
+                        .map((q: unknown) => (typeof q === "string" ? q.trim() : ""))
+                        .filter((q: string) => q.length > 0)
+                        .slice(0, 3)
+                    );
+                  } else {
+                    setFollowUps([]);
+                  }
                 } else if (currentEvent === "error") {
                   setError(parsed.message ?? "Unknown error");
+                  setFollowUps([]);
                 }
               } catch {
                 // malformed JSON — skip
@@ -114,5 +128,5 @@ export function useQueryStream() {
     [reset, updateNode]
   );
 
-  return { nodes, answer, streamingAnswer, streaming, error, submit, reset };
+  return { nodes, answer, streamingAnswer, streaming, error, submit, reset, followUps };
 }

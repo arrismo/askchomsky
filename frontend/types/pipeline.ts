@@ -10,6 +10,8 @@ export interface StageEvent {
 
 export interface DoneEvent {
   answer: string;
+  // Optional list of suggested follow-up questions returned by the backend
+  follow_up_questions?: string[];
 }
 
 export interface ErrorEvent {

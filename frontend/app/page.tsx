@@ -9,7 +9,7 @@ import { useQueryStream } from "@/hooks/useQueryStream";
 const FlowCanvas = dynamic(() => import("@/components/FlowCanvas"), { ssr: false });
 
 export default function Home() {
-  const { nodes, answer, streamingAnswer, streaming, error, submit, reset } = useQueryStream();
+  const { nodes, answer, streamingAnswer, streaming, error, submit, reset, followUps } = useQueryStream();
 
   const handleSubmit = (question: string) => {
     reset();
@@ -91,6 +91,28 @@ export default function Home() {
             {answer && !error && (
               <div className="text-sm text-zinc-300 leading-relaxed [&>p]:mb-3 [&>h1]:text-base [&>h1]:font-bold [&>h1]:text-zinc-100 [&>h1]:mb-2 [&>h2]:text-sm [&>h2]:font-semibold [&>h2]:text-zinc-200 [&>h2]:mb-2 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:text-zinc-300 [&>h3]:mb-1 [&>ul]:list-disc [&>ul]:pl-4 [&>ul]:mb-3 [&>ul>li]:mb-1 [&>ol]:list-decimal [&>ol]:pl-4 [&>ol]:mb-3 [&>ol>li]:mb-1 [&>hr]:border-zinc-700 [&>hr]:my-4 [&>strong]:text-zinc-100 [&>blockquote]:border-l-2 [&>blockquote]:border-zinc-600 [&>blockquote]:pl-3 [&>blockquote]:text-zinc-400 [&>blockquote]:italic [&>code]:bg-zinc-800 [&>code]:px-1 [&>code]:rounded [&>code]:text-xs [&>code]:font-mono">
                 <ReactMarkdown>{answer}</ReactMarkdown>
+              </div>
+            )}
+
+            {/* Follow-up questions suggested by the backend */}
+            {followUps.length > 0 && !error && (
+              <div className="mt-6 border-t border-zinc-800 pt-4">
+                <h3 className="text-xs font-semibold text-zinc-400 mb-2">
+                  Follow-up questions
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {followUps.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => handleSubmit(q)}
+                      disabled={streaming}
+                      className="text-[11px] px-2.5 py-1 rounded-lg border border-zinc-700 text-zinc-300 hover:text-zinc-100 hover:border-zinc-500 bg-zinc-900 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-left"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 

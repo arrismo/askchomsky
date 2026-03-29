@@ -408,6 +408,77 @@ async def _verify_claims(answer_text: str, chunks: list[dict[str, Any]]) -> str:
         return f"Verifier failed: {exc}"
 
 
+async def _generate_followup_questions(
+    question: str,
+    answer: str,
+    references: list[dict[str, Any]],
+) -> list[str]:
+    """Propose a small set of follow-up questions for the UI.
+
+    This uses the same LLM backend and returns 0–3 concise questions
+    as plain strings. Any parsing errors simply result in an empty list
+    so the rest of the pipeline is unaffected.
+    """
+    if not answer.strip():
+        return []
+
+    # Compact textual summary of sources (no need to be exhaustive)
+    ref_lines: list[str] = []
+    for ref in references[:5]:
+        ref_id = str(ref.get("reference_id", "")).strip()
+        file_path = str(ref.get("file_path", "")).strip()
+        if not (ref_id or file_path):
+            continue
+        if ref_id and file_path:
+            ref_lines.append(f"[{ref_id}] {file_path}")
+        else:
+            ref_lines.append(ref_id or file_path)
+
+    refs_block = "\n".join(ref_lines) if ref_lines else "N/A"
+
+    prompt = (
+        "You are helping a student explore Noam Chomsky's work in depth. "
+        "Given the original question, the answer, and a short list of sources, "
+        "propose 3 concise, specific follow-up questions that naturally extend the discussion. "
+        "Each question must be grounded in the same Chomsky corpus.\n\n"
+        "Return strict JSON with a single key `follow_up_questions` containing an array of 1–3 strings. "
+        "No additional keys, no markdown, no explanation.\n\n"
+        f"Original question:\n{question}\n\n"
+        f"Answer:\n{answer}\n\n"
+        f"Sources:\n{refs_block}"
+    )
+
+    try:
+        resp = await llm_model_func(
+            prompt,
+            system_prompt=(
+                "You propose thoughtful follow-up questions about Noam Chomsky's work. "
+                "Output strict JSON only with the key `follow_up_questions`."
+            ),
+            history_messages=[],
+        )
+        parsed = _extract_json_object(str(resp))
+        if not parsed:
+            return []
+
+        raw = parsed.get("follow_up_questions", [])
+        if not isinstance(raw, list):
+            return []
+
+        followups: list[str] = []
+        for item in raw:
+            text = str(item).strip()
+            if not text:
+                continue
+            followups.append(text[:400])
+            if len(followups) >= 3:
+                break
+        return followups
+    except Exception:
+        # Follow-up generation is best-effort; failures should be silent.
+        return []
+
+
 # ---------------------------------------------------------------------------
 # Core streaming generator
 # ---------------------------------------------------------------------------
@@ -587,8 +658,18 @@ async def _stream_pipeline(question: str) -> AsyncGenerator[str, None]:
         if verification:
             final += f"\n\n---\n**Claim Verification:** {verification}"
 
+        # Optionally generate follow-up questions for the frontend
+        followups: list[str] = []
+        if os.getenv("FOLLOWUP_QUESTIONS", "true").lower() == "true":
+            followups = await _generate_followup_questions(question, final, references)
+
         yield _stage_event("answer", "Answer", "done", detail=final)
-        yield _sse("done", {"answer": final})
+
+        done_payload: dict[str, Any] = {"answer": final}
+        if followups:
+            done_payload["follow_up_questions"] = followups
+
+        yield _sse("done", done_payload)
 
     except Exception as exc:
         yield _stage_event("answer", "Answer", "error", detail=str(exc))

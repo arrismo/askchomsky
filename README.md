@@ -2,6 +2,74 @@
 
 AskChomsky is a retrieval-augmented chatbot over a Noam Chomsky corpus.
 
+## Run Locally
+
+### Prerequisites
+
+- Python 3.14+
+- Node.js 20+
+- npm
+
+### 1) Backend setup (one-time)
+
+From the project root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -e .
+```
+
+### 2) Environment variables
+
+Create a `.env` file in the project root and add:
+
+```env
+openrouter_key=YOUR_OPENROUTER_KEY
+```
+
+Optional (observability):
+
+```env
+LANGFUSE_PUBLIC_KEY=...
+LANGFUSE_SECRET_KEY=...
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+```
+
+### 3) Frontend setup (one-time)
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### 4) Start the app
+
+Use two terminals from the project root:
+
+Terminal A (FastAPI backend on `http://127.0.0.1:8001`):
+
+```bash
+make backend
+```
+
+Terminal B (Next.js frontend on `http://localhost:3000`):
+
+```bash
+make frontend
+```
+
+Then open:
+
+- http://localhost:3000
+
+Notes:
+
+- If you want to run the frontend with a custom backend URL, set `NEXT_PUBLIC_API_URL` in `frontend/.env.local`.
+- Default backend URL in the frontend is `http://localhost:8001`.
+
 ## Tools Used
 
 - LightRAG (retrieval-augmented generation)
