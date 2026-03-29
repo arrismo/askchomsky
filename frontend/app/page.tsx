@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import QuestionInput from "@/components/QuestionInput";
@@ -10,10 +11,11 @@ const FlowCanvas = dynamic(() => import("@/components/FlowCanvas"), { ssr: false
 
 export default function Home() {
   const { nodes, answer, streamingAnswer, streaming, error, submit, reset, followUps } = useQueryStream();
+  const [mode, setMode] = useState<string>("hybrid");
 
   const handleSubmit = (question: string) => {
     reset();
-    submit(question);
+    submit(question, mode);
   };
 
   const hasStarted = nodes.some((n) => n.status !== "idle");
@@ -31,15 +33,32 @@ export default function Home() {
             </p>
           </div>
         </div>
-        {hasStarted && (
-          <button
-            onClick={reset}
-            disabled={streaming}
-            className="text-xs px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors disabled:opacity-40"
-          >
-            Reset
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+            <span>Mode</span>
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value)}
+              disabled={streaming}
+              className="bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-[11px] text-zinc-200 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+            >
+              <option value="naive">naive</option>
+              <option value="local">local</option>
+              <option value="global">global</option>
+              <option value="hybrid">hybrid</option>
+              <option value="mix">mix</option>
+            </select>
+          </div>
+          {hasStarted && (
+            <button
+              onClick={reset}
+              disabled={streaming}
+              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors disabled:opacity-40"
+            >
+              Reset
+            </button>
+          )}
+        </div>
       </header>
 
       {/* ── Body ── */}

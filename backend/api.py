@@ -58,6 +58,8 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 class QueryRequest(BaseModel):
     question: str
+    # Optional override for retrieval mode (naive, local, global, hybrid, mix)
+    mode: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -482,7 +484,10 @@ async def _generate_followup_questions(
 # ---------------------------------------------------------------------------
 # Core streaming generator
 # ---------------------------------------------------------------------------
-async def _stream_pipeline(question: str) -> AsyncGenerator[str, None]:
+async def _stream_pipeline(
+    question: str,
+    mode_override: str | None = None,
+) -> AsyncGenerator[str, None]:
     rag = None
     try:
         # ── Stage: Intent Router ──────────────────────────────────────────
@@ -530,8 +535,17 @@ async def _stream_pipeline(question: str) -> AsyncGenerator[str, None]:
         )
 
         # ── Stage: Retrieval (with retries, data only — no LLM) ──────────
-        mode = os.getenv("CHAINLIT_MODE", "hybrid")
-        attempt_modes = [mode, mode, "mix"] if mode != "mix" else ["mix", "mix"]
+        selected_mode = (
+            mode_override or os.getenv("CHAINLIT_MODE") or "hybrid"
+        ).lower()
+        if selected_mode not in {"naive", "local", "global", "hybrid", "mix"}:
+            selected_mode = "hybrid"
+
+        attempt_modes = (
+            [selected_mode, selected_mode, "mix"]
+            if selected_mode != "mix"
+            else ["mix", "mix"]
+        )
         selected_data: dict[str, Any] | None = None
         references: list[dict[str, str]] = []
         chunks: list[dict[str, Any]] = []

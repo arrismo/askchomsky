@@ -59,7 +59,7 @@ export default function QuestionInput({ onSubmit, disabled }: QuestionInputProps
         />
         <button
           onClick={handleSubmit}
-          disabled={disabled || !value.trim()}
+          disabled={disabled}
           className="
             flex-shrink-0 h-12 px-5 rounded-xl text-sm font-semibold
             bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700

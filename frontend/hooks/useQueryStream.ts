@@ -46,7 +46,7 @@ export function useQueryStream() {
   }, []);
 
   const submit = useCallback(
-    async (question: string) => {
+    async (question: string, mode?: string) => {
       // Cancel any in-flight request
       abortRef.current?.abort();
       abortRef.current = new AbortController();
@@ -55,10 +55,15 @@ export function useQueryStream() {
       setStreaming(true);
 
       try {
+        const payload: Record<string, unknown> = { question };
+        if (mode) {
+          payload.mode = mode;
+        }
+
         const response = await fetch(`${API_URL}/query`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question }),
+          body: JSON.stringify(payload),
           signal: abortRef.current.signal,
         });
 
