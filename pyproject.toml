@@ -9,6 +9,8 @@ description = "AskChomsky RAG backend and tools"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
     "datasets>=4.8.2",
     "langfuse>=4.0.1",
     "lightrag-hku>=1.4.11",
