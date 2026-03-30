@@ -44,6 +44,7 @@ export default function Home() {
   const [compareError, setCompareError] = useState<string>("");
   const [compareAnswerA, setCompareAnswerA] = useState<string>("");
   const [compareAnswerB, setCompareAnswerB] = useState<string>("");
+  const [showCompareModal, setShowCompareModal] = useState<boolean>(false);
 
   const handleSubmit = (question: string) => {
     reset();
@@ -309,6 +310,7 @@ export default function Home() {
                         } else {
                           setCompareAnswerA(String(data.answer_a ?? ""));
                           setCompareAnswerB(String(data.answer_b ?? ""));
+                          setShowCompareModal(true);
                         }
                       } catch (err) {
                         setCompareError(err instanceof Error ? err.message : "Compare failed");
@@ -419,6 +421,63 @@ export default function Home() {
               >
                 Got it
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Compare popup: larger, side-by-side view of answers */}
+      {showCompareModal && (compareAnswerA || compareAnswerB) && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4">
+          <div className="max-w-5xl w-full max-h-[80vh] rounded-2xl bg-zinc-950 border border-zinc-800 shadow-xl p-5 flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <h2 className="text-sm font-semibold text-zinc-100">Mode comparison</h2>
+                {lastQuestion && (
+                  <p className="text-xs text-zinc-400">
+                    Question: <span className="text-zinc-200">{lastQuestion}</span>
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCompareModal(false)}
+                className="text-[11px] text-zinc-500 hover:text-zinc-200"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0 text-xs text-zinc-300">
+              <div className="border border-zinc-800 rounded-xl bg-zinc-950/70 flex flex-col min-h-0">
+                <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
+                  <span className="font-semibold text-sm">Mode A: {compareModeA}</span>
+                </div>
+                <div className="flex-1 min-h-0 px-3 py-2 overflow-y-auto leading-relaxed">
+                  {compareAnswerA ? (
+                    <ReactMarkdown className="prose prose-invert prose-sm max-w-none">
+                      {compareAnswerA}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="text-zinc-600">No answer yet.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="border border-zinc-800 rounded-xl bg-zinc-950/70 flex flex-col min-h-0">
+                <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
+                  <span className="font-semibold text-sm">Mode B: {compareModeB}</span>
+                </div>
+                <div className="flex-1 min-h-0 px-3 py-2 overflow-y-auto leading-relaxed">
+                  {compareAnswerB ? (
+                    <ReactMarkdown className="prose prose-invert prose-sm max-w-none">
+                      {compareAnswerB}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="text-zinc-600">No answer yet.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

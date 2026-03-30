@@ -569,6 +569,7 @@ async def _stream_pipeline(
         references: list[dict[str, str]] = []
         chunks: list[dict[str, Any]] = []
         final_param: QueryParam | None = None
+        last_attempt_index = -1
 
         for retry_level, attempt_mode in enumerate(attempt_modes):
             stage_id = f"retrieval_{retry_level + 1}"
@@ -580,7 +581,9 @@ async def _stream_pipeline(
                 stage_id,
                 label,
                 "running",
-                detail=f"mode: {param.mode}\ntop_k: {param.top_k}\nchunk_top_k: {param.chunk_top_k}\nrerank: {param.enable_rerank}",
+                detail=(
+                    f"mode: {param.mode}\ntop_k: {param.top_k}\nchunk_top_k: {param.chunk_top_k}\nrerank: {param.enable_rerank}"
+                ),
             )
             data_result = await rag.aquery_data(rewritten, param=param)
             refs = _extract_references(data_result)
@@ -592,6 +595,10 @@ async def _stream_pipeline(
                 detail=f"references: {len(refs)}\nchunks: {len(cks)}",
                 extra={"attempt": retry_level + 1},
             )
+
+            # Track which attempt actually ran
+            last_attempt_index = retry_level
+
             # Accept this attempt if we got chunks or references
             if refs or cks:
                 selected_data = data_result
@@ -599,11 +606,29 @@ async def _stream_pipeline(
                 chunks = cks
                 final_param = param
                 break
+
             # Keep going on next retry
             selected_data = data_result
             references = refs
             chunks = cks
             final_param = param
+
+        # Mark any later retrieval stages as "skipped" so the UI shows
+        # them as completed even if they were never actually executed.
+        for skipped_level in range(last_attempt_index + 1, len(attempt_modes)):
+            stage_id = f"retrieval_{skipped_level + 1}"
+            label = (
+                "Retrieval"
+                if skipped_level == 0
+                else f"Retrieval (retry {skipped_level})"
+            )
+            yield _stage_event(
+                stage_id,
+                label,
+                "done",
+                detail="Skipped: earlier retrieval attempt returned sufficient context.",
+                extra={"skipped": True},
+            )
 
         if not final_param:
             yield _stage_event(
