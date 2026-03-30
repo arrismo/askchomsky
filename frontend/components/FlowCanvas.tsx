@@ -23,6 +23,7 @@ interface PipelineNodeDataShape extends Record<string, unknown> {
   status: string;
   detail: string;
   icon: string;
+  selected?: boolean;
 }
 
 // ── Icon map ────────────────────────────────────────────────────────────────
@@ -76,9 +77,11 @@ const nodeTypes: Record<string, any> = { pipeline: PipelineNode };
 
 interface FlowCanvasProps {
   nodeStates: NodeState[];
+  onSelectStage?: (id: string) => void;
+  selectedStageId?: string | null;
 }
 
-export default function FlowCanvas({ nodeStates }: FlowCanvasProps) {
+export default function FlowCanvas({ nodeStates, onSelectStage, selectedStageId }: FlowCanvasProps) {
   const initialNodes: Node<PipelineNodeDataShape>[] = useMemo(
     () =>
       nodeStates.map((ns) => ({
@@ -90,6 +93,7 @@ export default function FlowCanvas({ nodeStates }: FlowCanvasProps) {
           status: ns.status,
           detail: ns.detail,
           icon: ICONS[ns.id] ?? "⚙️",
+          selected: ns.id === selectedStageId,
         },
         draggable: true,
       })),
@@ -113,11 +117,12 @@ export default function FlowCanvas({ nodeStates }: FlowCanvasProps) {
             label: updated.label,
             status: updated.status,
             detail: updated.detail,
+            selected: selectedStageId ? updated.id === selectedStageId : (n.data as PipelineNodeDataShape).selected,
           },
         };
       })
     );
-  }, [nodeStates, setNodes]);
+  }, [nodeStates, selectedStageId, setNodes]);
 
   // Animate edges that connect active/done nodes
   const animatedEdges = useMemo(() => {
@@ -149,6 +154,11 @@ export default function FlowCanvas({ nodeStates }: FlowCanvasProps) {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
+        onNodeClick={(_, node) => {
+          if (onSelectStage) {
+            onSelectStage(node.id);
+          }
+        }}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.2}

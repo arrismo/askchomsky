@@ -9,6 +9,7 @@ export type PipelineNodeData = Node<{
   status: StageStatus;
   detail: string;
   icon: string;
+  selected?: boolean;
 }>;
 
 const statusStyles: Record<StageStatus, string> = {
@@ -33,13 +34,20 @@ const statusLabel: Record<StageStatus, string> = {
 };
 
 function PipelineNode({ data }: NodeProps<PipelineNodeData>) {
-  const { label, status, detail, icon } = data as { label: string; status: StageStatus; detail: string; icon: string };
+  const { label, status, detail, icon, selected } = data as {
+    label: string;
+    status: StageStatus;
+    detail: string;
+    icon: string;
+    selected?: boolean;
+  };
 
   return (
     <div
       className={`
-        relative rounded-xl border-2 p-4 w-64 min-h-[90px] transition-all duration-300 cursor-default
+        relative rounded-xl border-2 p-4 w-64 min-h-[90px] transition-all duration-300 cursor-pointer
         ${statusStyles[status]}
+        ${selected ? "ring-2 ring-indigo-400 ring-offset-2 ring-offset-zinc-950" : ""}
       `}
     >
       {/* Top handle */}

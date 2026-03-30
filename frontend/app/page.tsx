@@ -1,10 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import QuestionInput from "@/components/QuestionInput";
 import { useQueryStream } from "@/hooks/useQueryStream";
+import { PIPELINE_STAGES, type NodeState } from "@/types/pipeline";
+
+const STAGE_DESCRIPTIONS: Record<string, string> = {
+  intent:
+    "Classifies the user message as a real corpus question vs. small talk or other intent, so the pipeline can short-circuit when appropriate.",
+  rewrite:
+    "Rewrites the question into a retrieval-optimized form while preserving meaning and key entities, to improve RAG recall.",
+  rag_init:
+    "Initializes the LightRAG store and loads the graph/vector index from disk for this session.",
+  retrieval_1:
+    "Runs the first retrieval pass over the Chomsky corpus using the selected mode and top-k settings.",
+  retrieval_2:
+    "If the first pass is weak, retries retrieval with more aggressive parameters (higher top-k / chunk_top_k).",
+  retrieval_3:
+    "Final retrieval retry with the most expansive settings to maximize recall when earlier passes are insufficient.",
+  citations:
+    "Summarizes which corpus files were used and ensures the answer will refer back to them with citation markers.",
+  verification:
+    "Uses a secondary verifier to check whether the answer is supported by the retrieved snippets and flags unsupported claims.",
+  answer:
+    "Streams the answer tokens, then post-processes with citations and claim verification before returning the final response.",
+};
 
 // React Flow must be loaded client-side only (uses browser APIs)
 const FlowCanvas = dynamic(() => import("@/components/FlowCanvas"), { ssr: false });
@@ -12,11 +34,23 @@ const FlowCanvas = dynamic(() => import("@/components/FlowCanvas"), { ssr: false
 export default function Home() {
   const { nodes, answer, streamingAnswer, streaming, error, submit, reset, followUps } = useQueryStream();
   const [mode, setMode] = useState<string>("hybrid");
+  const [selectedStageId, setSelectedStageId] = useState<string>(PIPELINE_STAGES[0]);
 
   const handleSubmit = (question: string) => {
     reset();
     submit(question, mode);
   };
+
+  const handleSelectStage = (id: string) => {
+    if (PIPELINE_STAGES.includes(id as (typeof PIPELINE_STAGES)[number])) {
+      setSelectedStageId(id);
+    }
+  };
+
+  const selectedNode: NodeState | undefined = useMemo(
+    () => nodes.find((n) => n.id === selectedStageId),
+    [nodes, selectedStageId]
+  );
 
   const hasStarted = nodes.some((n) => n.status !== "idle");
 
@@ -63,18 +97,65 @@ export default function Home() {
 
       {/* ── Body ── */}
       <div className="flex flex-1 min-h-0">
-        {/* Left panel: flow diagram */}
-        <div className="flex-1 min-w-0 relative">
-          {hasStarted ? (
-            <FlowCanvas nodeStates={nodes} />
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-              <span className="text-5xl opacity-20">🔍</span>
-              <p className="text-zinc-600 text-sm text-center max-w-xs leading-relaxed">
-                Ask a question below to watch the RAG pipeline come alive — each node lights up as the agent processes your query.
-              </p>
+        {/* Left panel: flow diagram + stage detail */}
+        <div className="flex-1 min-w-0 flex flex-col border-r border-zinc-900">
+          <div className="flex-1 min-h-0 relative">
+            {hasStarted ? (
+              <FlowCanvas
+                nodeStates={nodes}
+                onSelectStage={handleSelectStage}
+                selectedStageId={selectedStageId}
+              />
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+                <span className="text-5xl opacity-20">🔍</span>
+                <p className="text-zinc-600 text-sm text-center max-w-xs leading-relaxed">
+                  Ask a question below to watch the RAG pipeline come alive — each node lights up as the agent processes your query.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Stage detail panel */}
+          <div className="h-40 border-t border-zinc-900 bg-zinc-950/80 px-4 py-3 flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-col">
+                <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Stage details</span>
+                <span className="text-sm font-semibold text-zinc-100 truncate">
+                  {selectedNode?.label ?? "Select a stage"}
+                </span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full border border-zinc-700 text-zinc-400">
+                {selectedNode?.status === "running"
+                  ? "Running"
+                  : selectedNode?.status === "done"
+                  ? "Done"
+                  : selectedNode?.status === "error"
+                  ? "Error"
+                  : "Idle"}
+              </span>
             </div>
-          )}
+
+            <p className="text-[11px] text-zinc-400 leading-snug line-clamp-2">
+              {selectedStageId && STAGE_DESCRIPTIONS[selectedStageId]
+                ? STAGE_DESCRIPTIONS[selectedStageId]
+                : "Click a node in the pipeline to see what it does."}
+            </p>
+
+            <div className="flex-1 min-h-0 mt-1 rounded-lg bg-zinc-950 border border-zinc-900 overflow-hidden">
+              <div className="h-full w-full overflow-y-auto px-3 py-2">
+                {selectedNode?.detail ? (
+                  <pre className="text-[10px] leading-snug text-zinc-400 whitespace-pre-wrap font-mono">
+                    {selectedNode.detail}
+                  </pre>
+                ) : (
+                  <p className="text-[10px] text-zinc-600">
+                    Live stage diagnostics will appear here as the pipeline runs.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Right panel: answer */}
