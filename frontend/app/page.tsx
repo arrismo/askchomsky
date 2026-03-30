@@ -86,7 +86,7 @@ export default function Home() {
             rel="noreferrer"
             className="text-[11px] px-2 py-1 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
           >
-            Corpus
+            View Corpus
           </a>
           <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
             <span>Mode</span>
@@ -455,9 +455,9 @@ export default function Home() {
                 </div>
                 <div className="flex-1 min-h-0 px-3 py-2 overflow-y-auto leading-relaxed">
                   {compareAnswerA ? (
-                    <ReactMarkdown className="prose prose-invert prose-sm max-w-none">
-                      {compareAnswerA}
-                    </ReactMarkdown>
+                    <div className="prose prose-invert prose-sm max-w-none">
+                      <ReactMarkdown>{compareAnswerA}</ReactMarkdown>
+                    </div>
                   ) : (
                     <p className="text-zinc-600">No answer yet.</p>
                   )}
@@ -470,9 +470,9 @@ export default function Home() {
                 </div>
                 <div className="flex-1 min-h-0 px-3 py-2 overflow-y-auto leading-relaxed">
                   {compareAnswerB ? (
-                    <ReactMarkdown className="prose prose-invert prose-sm max-w-none">
-                      {compareAnswerB}
-                    </ReactMarkdown>
+                    <div className="prose prose-invert prose-sm max-w-none">
+                      <ReactMarkdown>{compareAnswerB}</ReactMarkdown>
+                    </div>
                   ) : (
                     <p className="text-zinc-600">No answer yet.</p>
                   )}

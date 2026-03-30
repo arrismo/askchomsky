@@ -80,7 +80,7 @@ Notes:
 
 ## Dataset Used
 
-- Hugging Face dataset: `mmoise00/chomsky-corpus`
+- Hugging Face dataset: [`mmoise00/chomsky-corpus`](https://huggingface.co/datasets/mmoise00/chomsky-corpus)
 - Loaded from the `train` split in the app
 - Each record includes:
 	- `content`
