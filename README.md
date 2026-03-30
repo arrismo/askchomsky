@@ -109,3 +109,5 @@ Notes:
 - LightRAG uses your OpenRouter key from `.env` (`openrouter_key`) for answer generation.
 - This setup uses local embeddings with `BAAI/bge-base-en-v1.5`.
 - Available query modes: `naive`, `local`, `global`, `hybrid`, `mix`.
+ - In production you can set `RAG_WORKING_DIR` to control where the LightRAG index is stored
+   (the backend uses `RAG_WORKING_DIR` or defaults to `./lightrag_store`).

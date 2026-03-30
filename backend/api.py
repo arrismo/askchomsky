@@ -547,7 +547,8 @@ async def _stream_pipeline(
 
         # ── Stage: RAG Init ──────────────────────────────────────────────
         yield _stage_event("rag_init", "Loading RAG Store", "running")
-        working_dir = os.getenv("CHAINLIT_WORKING_DIR", DEFAULT_WORKING_DIR)
+        # RAG_WORKING_DIR controls where the LightRAG index is stored.
+        working_dir = os.getenv("RAG_WORKING_DIR", DEFAULT_WORKING_DIR)
         rag = await initialize_rag(working_dir)
         yield _stage_event(
             "rag_init", "Loading RAG Store", "done", detail=f"Store: {working_dir}"
@@ -786,7 +787,9 @@ async def compare(req: CompareRequest) -> dict:
 
     # Use the same working directory as the streaming pipeline so
     # comparisons run against the actual ingested LightRAG store.
-    working_dir = os.getenv("CHAINLIT_WORKING_DIR", DEFAULT_WORKING_DIR)
+    # Use the same working directory as the streaming pipeline so
+    # comparisons run against the actual ingested LightRAG store.
+    working_dir = os.getenv("RAG_WORKING_DIR", DEFAULT_WORKING_DIR)
 
     answer_a, answer_b = await asyncio.gather(
         query_rag(question, mode=mode_a, working_dir=working_dir),
