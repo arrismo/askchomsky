@@ -288,6 +288,16 @@ def _has_citation_marker(text: str) -> bool:
     return bool(re.search(r"\[\d+\]", text))
 
 
+def _strip_citation_markers(text: str) -> str:
+    """Remove standalone [n] markers when we have no structured references.
+
+    This prevents the UI from showing fake citation numbers like [23]
+    when the retrieval layer did not return any references.
+    """
+    # Remove optional leading whitespace and the marker itself.
+    return re.sub(r"\s*\[\d+\]", "", text).strip()
+
+
 def _render_references(references: list[dict[str, str]]) -> str:
     if not references:
         return ""
@@ -302,7 +312,9 @@ def _render_references(references: list[dict[str, str]]) -> str:
 
 def _enforce_citation_answer(answer: str, references: list[dict[str, str]]) -> str:
     if not references:
-        return answer
+        # No structured references: strip any citation-like markers the
+        # model may have invented so the UI does not imply phantom sources.
+        return _strip_citation_markers(answer)
     rendered = _render_references(references)
     safe = answer.strip()
     if not _has_citation_marker(safe):

@@ -35,6 +35,7 @@ export default function Home() {
   const { nodes, answer, streamingAnswer, streaming, error, submit, reset, followUps } = useQueryStream();
   const [mode, setMode] = useState<string>("hybrid");
   const [selectedStageId, setSelectedStageId] = useState<string>(PIPELINE_STAGES[0]);
+  const [showIntro, setShowIntro] = useState<boolean>(true);
 
   const handleSubmit = (question: string) => {
     reset();
@@ -68,6 +69,14 @@ export default function Home() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <a
+            href="https://huggingface.co/datasets/mmoise00/chomsky-corpus"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[11px] px-2 py-1 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+          >
+            Corpus
+          </a>
           <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
             <span>Mode</span>
             <select
@@ -83,6 +92,13 @@ export default function Home() {
               <option value="mix">mix</option>
             </select>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowIntro(true)}
+            className="text-[11px] px-2 py-1 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+          >
+            Help
+          </button>
           {hasStarted && (
             <button
               onClick={reset}
@@ -229,6 +245,64 @@ export default function Home() {
       <footer className="flex-shrink-0 border-t border-zinc-800 px-6 py-4">
         <QuestionInput onSubmit={handleSubmit} disabled={streaming} />
       </footer>
+
+      {/* Intro popup: explains the project and UI layout */}
+      {showIntro && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="max-w-lg w-full rounded-2xl bg-zinc-950 border border-zinc-800 shadow-xl p-5 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-100">Welcome to AskChomsky</h2>
+                <p className="text-xs text-zinc-400 mt-1">
+                  AskChomsky is a retrieval-augmented chatbot over a curated Noam Chomsky corpus. The UI lets you
+                  see how each stage of the RAG pipeline behaves for your question.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowIntro(false)}
+                className="text-[11px] text-zinc-500 hover:text-zinc-200"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-zinc-300">
+              <div>
+                <p className="font-semibold text-zinc-200">Layout</p>
+                <p className="text-zinc-400">
+                  Left: a graph of pipeline stages (intent router, query rewrite, retrieval passes, citations, verification, answer).
+                  Click any node to see a short explanation and live diagnostics for that stage.
+                </p>
+              </div>
+              <div>
+                <p className="font-semibold text-zinc-200">Answer panel</p>
+                <p className="text-zinc-400">
+                  Right: the answer streams in as tokens, then is post-processed with citations and claim verification. Suggested
+                  follow-up questions appear under the answer.
+                </p>
+              </div>
+              <div>
+                <p className="font-semibold text-zinc-200">Controls</p>
+                <p className="text-zinc-400">
+                  Use the mode selector in the header to switch LightRAG modes (naive, local, global, hybrid, mix). At the bottom,
+                  type a question about Chomsky&apos;s work and press Enter or click "Ask" to run the pipeline.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowIntro(false)}
+                className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
