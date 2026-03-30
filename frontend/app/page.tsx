@@ -38,8 +38,8 @@ export default function Home() {
   const [mode, setMode] = useState<string>("hybrid");
   const [selectedStageId, setSelectedStageId] = useState<string>(PIPELINE_STAGES[0]);
   const [showIntro, setShowIntro] = useState<boolean>(true);
-  const [compareModeA, setCompareModeA] = useState<string>("local");
-  const [compareModeB, setCompareModeB] = useState<string>("global");
+  const [compareModeA, setCompareModeA] = useState<string>("hybrid");
+  const [compareModeB, setCompareModeB] = useState<string>("hybrid");
   const [compareLoading, setCompareLoading] = useState<boolean>(false);
   const [compareError, setCompareError] = useState<string>("");
   const [compareAnswerA, setCompareAnswerA] = useState<string>("");

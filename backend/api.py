@@ -781,8 +781,8 @@ async def compare(req: CompareRequest) -> dict:
     if not question:
         return {"error": "Empty question."}
 
-    mode_a = _normalize_mode(req.mode_a, "local")
-    mode_b = _normalize_mode(req.mode_b, "global")
+    mode_a = _normalize_mode(req.mode_a, "hybrid")
+    mode_b = _normalize_mode(req.mode_b, "hybrid")
 
     # Use the same working directory as the streaming pipeline so
     # comparisons run against the actual ingested LightRAG store.
