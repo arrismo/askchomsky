@@ -6,7 +6,6 @@ import {
   Background,
   BackgroundVariant,
   Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   MarkerType,
@@ -168,17 +167,6 @@ export default function FlowCanvas({ nodeStates, onSelectStage, selectedStageId 
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#27272a" />
         <Controls className="!bg-zinc-900 !border-zinc-700 !text-zinc-300" />
-        <MiniMap
-          nodeColor={(n) => {
-            const status = (n.data as PipelineNodeDataShape).status;
-            if (status === "running") return "#3b82f6";
-            if (status === "done") return "#10b981";
-            if (status === "error") return "#ef4444";
-            return "#3f3f46";
-          }}
-          maskColor="rgba(9,9,11,0.8)"
-          className="!bg-zinc-900 !border-zinc-700"
-        />
       </ReactFlow>
     </div>
   );

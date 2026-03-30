@@ -7,6 +7,8 @@ import QuestionInput from "@/components/QuestionInput";
 import { useQueryStream } from "@/hooks/useQueryStream";
 import { PIPELINE_STAGES, type NodeState } from "@/types/pipeline";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+
 const STAGE_DESCRIPTIONS: Record<string, string> = {
   intent:
     "Classifies the user message as a real corpus question vs. small talk or other intent, so the pipeline can short-circuit when appropriate.",
@@ -32,10 +34,16 @@ const STAGE_DESCRIPTIONS: Record<string, string> = {
 const FlowCanvas = dynamic(() => import("@/components/FlowCanvas"), { ssr: false });
 
 export default function Home() {
-  const { nodes, answer, streamingAnswer, streaming, error, submit, reset, followUps } = useQueryStream();
+  const { nodes, answer, streamingAnswer, streaming, error, submit, reset, followUps, lastQuestion } = useQueryStream();
   const [mode, setMode] = useState<string>("hybrid");
   const [selectedStageId, setSelectedStageId] = useState<string>(PIPELINE_STAGES[0]);
   const [showIntro, setShowIntro] = useState<boolean>(true);
+  const [compareModeA, setCompareModeA] = useState<string>("local");
+  const [compareModeB, setCompareModeB] = useState<string>("global");
+  const [compareLoading, setCompareLoading] = useState<boolean>(false);
+  const [compareError, setCompareError] = useState<string>("");
+  const [compareAnswerA, setCompareAnswerA] = useState<string>("");
+  const [compareAnswerB, setCompareAnswerB] = useState<string>("");
 
   const handleSubmit = (question: string) => {
     reset();
@@ -54,6 +62,8 @@ export default function Home() {
   );
 
   const hasStarted = nodes.some((n) => n.status !== "idle");
+
+  const canCompare = !!lastQuestion && !streaming && !error;
 
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
@@ -174,12 +184,12 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right panel: answer */}
-        <aside className="w-[380px] flex-shrink-0 border-l border-zinc-800 flex flex-col">
-          <div className="px-5 py-3 border-b border-zinc-800">
-            <h2 className="text-sm font-semibold text-zinc-300">Answer</h2>
-          </div>
-          <div className="flex-1 overflow-y-auto px-5 py-4">
+          {/* Right panel: answer */}
+          <aside className="w-[380px] flex-shrink-0 border-l border-zinc-800 flex flex-col">
+            <div className="px-5 py-3 border-b border-zinc-800">
+              <h2 className="text-sm font-semibold text-zinc-300">Answer</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
             {/* Spinner only while pipeline stages run, before tokens start */}
             {streaming && !streamingAnswer && !answer && (
               <div className="flex items-center gap-2 text-zinc-500 text-sm">
@@ -229,6 +239,110 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Side-by-side mode comparison */}
+            {canCompare && (
+              <div className="mt-6 border-t border-zinc-800 pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-zinc-400">Compare modes</h3>
+                  {compareError && (
+                    <span className="text-[10px] text-red-400">{compareError}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                    <span>A</span>
+                    <select
+                      value={compareModeA}
+                      onChange={(e) => setCompareModeA(e.target.value)}
+                      disabled={compareLoading}
+                      className="bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-[11px] text-zinc-200 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+                    >
+                      <option value="naive">naive</option>
+                      <option value="local">local</option>
+                      <option value="global">global</option>
+                      <option value="hybrid">hybrid</option>
+                      <option value="mix">mix</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                    <span>B</span>
+                    <select
+                      value={compareModeB}
+                      onChange={(e) => setCompareModeB(e.target.value)}
+                      disabled={compareLoading}
+                      className="bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-[11px] text-zinc-200 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+                    >
+                      <option value="naive">naive</option>
+                      <option value="local">local</option>
+                      <option value="global">global</option>
+                      <option value="hybrid">hybrid</option>
+                      <option value="mix">mix</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!lastQuestion) return;
+                      setCompareError("");
+                      setCompareAnswerA("");
+                      setCompareAnswerB("");
+                      setCompareLoading(true);
+                      try {
+                        const res = await fetch(`${API_URL}/compare`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            question: lastQuestion,
+                            mode_a: compareModeA,
+                            mode_b: compareModeB,
+                          }),
+                        });
+                        if (!res.ok) {
+                          throw new Error(`Server error: ${res.status}`);
+                        }
+                        const data = await res.json();
+                        if (data.error) {
+                          setCompareError(data.error as string);
+                        } else {
+                          setCompareAnswerA(String(data.answer_a ?? ""));
+                          setCompareAnswerB(String(data.answer_b ?? ""));
+                        }
+                      } catch (err) {
+                        setCompareError(err instanceof Error ? err.message : "Compare failed");
+                      } finally {
+                        setCompareLoading(false);
+                      }
+                    }}
+                    disabled={compareLoading}
+                    className="ml-auto text-[11px] px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 disabled:opacity-40"
+                  >
+                    {compareLoading ? "Comparing..." : "Run compare"}
+                  </button>
+                </div>
+
+                {(compareAnswerA || compareAnswerB) && (
+                  <div className="grid grid-cols-2 gap-3 text-[11px] text-zinc-300">
+                    <div className="border border-zinc-800 rounded-lg p-2 bg-zinc-950/60">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold">Mode A: {compareModeA}</span>
+                      </div>
+                      <div className="text-[11px] leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
+                        {compareAnswerA || <span className="text-zinc-600">No answer yet.</span>}
+                      </div>
+                    </div>
+                    <div className="border border-zinc-800 rounded-lg p-2 bg-zinc-950/60">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold">Mode B: {compareModeB}</span>
+                      </div>
+                      <div className="text-[11px] leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
+                        {compareAnswerB || <span className="text-zinc-600">No answer yet.</span>}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -287,6 +401,12 @@ export default function Home() {
                 <p className="text-zinc-400">
                   Use the mode selector in the header to switch LightRAG modes (naive, local, global, hybrid, mix). At the bottom,
                   type a question about Chomsky&apos;s work and press Enter or click "Ask" to run the pipeline.
+                </p>
+                <p className="text-zinc-500 mt-1">
+                  <span className="font-semibold text-zinc-300">Modes:</span> <span className="font-mono">naive</span> is fast vector search;
+                  <span className="font-mono"> local</span> focuses on nearby graph context; <span className="font-mono">global</span> explores wider connections;
+                  <span className="font-mono"> hybrid</span> balances depth and breadth (good default); <span className="font-mono">mix</span> combines strategies for
+                  maximum recall at higher cost.
                 </p>
               </div>
             </div>

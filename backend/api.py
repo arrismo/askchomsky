@@ -37,6 +37,7 @@ from main import (
     QueryParam,
     initialize_rag,
     llm_model_func,
+    query_rag,
 )
 
 # ---------------------------------------------------------------------------
@@ -60,6 +61,12 @@ class QueryRequest(BaseModel):
     question: str
     # Optional override for retrieval mode (naive, local, global, hybrid, mix)
     mode: str | None = None
+
+
+class CompareRequest(BaseModel):
+    question: str
+    mode_a: str | None = None
+    mode_b: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -724,10 +731,47 @@ async def query(req: QueryRequest) -> StreamingResponse:
         return StreamingResponse(_empty(), media_type="text/event-stream")
 
     return StreamingResponse(
-        _stream_pipeline(question),
+        _stream_pipeline(question, mode_override=req.mode),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
     )
+
+
+_ALLOWED_MODES = {"naive", "local", "global", "hybrid", "mix"}
+
+
+def _normalize_mode(value: str | None, default: str) -> str:
+    if not value:
+        return default
+    v = value.lower()
+    return v if v in _ALLOWED_MODES else default
+
+
+@app.post("/compare")
+async def compare(req: CompareRequest) -> dict:
+    question = req.question.strip()
+    if not question:
+        return {"error": "Empty question."}
+
+    mode_a = _normalize_mode(req.mode_a, "local")
+    mode_b = _normalize_mode(req.mode_b, "global")
+
+    # Use the same working directory as the streaming pipeline so
+    # comparisons run against the actual ingested LightRAG store.
+    working_dir = os.getenv("CHAINLIT_WORKING_DIR", DEFAULT_WORKING_DIR)
+
+    answer_a, answer_b = await asyncio.gather(
+        query_rag(question, mode=mode_a, working_dir=working_dir),
+        query_rag(question, mode=mode_b, working_dir=working_dir),
+    )
+
+    return {
+        "question": question,
+        "mode_a": mode_a,
+        "answer_a": answer_a,
+        "mode_b": mode_b,
+        "answer_b": answer_b,
+    }

@@ -24,7 +24,8 @@ export function useQueryStream() {
   const [streamingAnswer, setStreamingAnswer] = useState<string>("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string>("");
-   const [followUps, setFollowUps] = useState<string[]>([]);
+  const [followUps, setFollowUps] = useState<string[]>([]);
+  const [lastQuestion, setLastQuestion] = useState<string>("");
   const abortRef = useRef<AbortController | null>(null);
 
   const reset = useCallback(() => {
@@ -32,7 +33,7 @@ export function useQueryStream() {
     setAnswer("");
     setStreamingAnswer("");
     setError("");
-     setFollowUps([]);
+    setFollowUps([]);
   }, []);
 
   const updateNode = useCallback((event: StageEvent) => {
@@ -51,6 +52,7 @@ export function useQueryStream() {
       abortRef.current?.abort();
       abortRef.current = new AbortController();
 
+      setLastQuestion(question);
       reset();
       setStreaming(true);
 
@@ -133,5 +135,5 @@ export function useQueryStream() {
     [reset, updateNode]
   );
 
-  return { nodes, answer, streamingAnswer, streaming, error, submit, reset, followUps };
+  return { nodes, answer, streamingAnswer, streaming, error, submit, reset, followUps, lastQuestion };
 }
