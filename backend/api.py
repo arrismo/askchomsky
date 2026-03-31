@@ -34,7 +34,6 @@ from pydantic import BaseModel
 from main import (
     CITATION_SYSTEM_PROMPT,
     DEFAULT_WORKING_DIR,
-    QueryParam,
     initialize_rag,
     llm_model_func,
     query_rag,
@@ -343,7 +342,7 @@ def _looks_like_no_answer(answer: str) -> bool:
 
 def _dynamic_query_param(
     mode: str, original: str, rewritten: str, retry_level: int
-) -> QueryParam:
+) -> "QueryParam":
     base_top_k = int(os.getenv("TOP_K", "40"))
     base_chunk_top_k = int(os.getenv("CHUNK_TOP_K", "20"))
     text = f"{original} {rewritten}".lower()

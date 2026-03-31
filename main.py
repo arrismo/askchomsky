@@ -6,7 +6,7 @@ import os
 import re
 import sys
 from functools import lru_cache
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 
 def ensure_project_venv() -> None:
@@ -30,7 +30,12 @@ ensure_project_venv()
 import numpy as np
 from datasets import load_dataset
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
+
+if TYPE_CHECKING:
+    # Imported only for type checking; the actual import of
+    # SentenceTransformer happens lazily inside get_embedder to
+    # keep module import (and thus API startup) lightweight.
+    from sentence_transformers import SentenceTransformer
 
 
 load_dotenv()
@@ -61,11 +66,15 @@ def configure_logging() -> None:
 configure_logging()
 
 
-from lightrag import LightRAG, QueryParam
-from lightrag.llm.openai import openai_complete_if_cache
-from lightrag.utils import EmbeddingFunc
+if TYPE_CHECKING:
+    # These imports are heavy (transitively pull in torch, CUDA, etc.).
+    # Import them only for type checking; at runtime we import lazily.
+    from lightrag import LightRAG, QueryParam
+    from lightrag.llm.openai import openai_complete_if_cache
+    from lightrag.utils import EmbeddingFunc
 
-# LightRAG configures its own logger during import, so apply our level again.
+# LightRAG configures its own logger during import, so apply our level again
+# once we actually import it lazily at runtime (see initialize_rag).
 configure_logging()
 
 
@@ -142,7 +151,11 @@ def configure_langfuse() -> bool:
 
 
 @lru_cache(maxsize=1)
-def get_embedder() -> SentenceTransformer:
+def get_embedder() -> "SentenceTransformer":
+    # Lazy import avoids loading heavy ML stacks during module import,
+    # which helps services like Render bind the HTTP port quickly.
+    from sentence_transformers import SentenceTransformer
+
     return SentenceTransformer(EMBED_MODEL)
 
 
@@ -166,6 +179,9 @@ async def llm_model_func(
     keyword_extraction=False,
     **kwargs,
 ) -> str:
+    # Import here to avoid pulling in heavy dependencies during module import.
+    from lightrag.llm.openai import openai_complete_if_cache
+
     api_key = os.getenv("openrouter_key")
     if not api_key:
         raise ValueError("Missing openrouter_key in .env")
@@ -186,7 +202,12 @@ async def llm_model_func(
     )
 
 
-async def initialize_rag(working_dir: str = DEFAULT_WORKING_DIR) -> LightRAG:
+async def initialize_rag(working_dir: str = DEFAULT_WORKING_DIR) -> "LightRAG":
+    # Lazy imports keep startup fast and avoid loading the full
+    # LightRAG/torch stack until we actually need RAG functionality.
+    from lightrag import LightRAG
+    from lightrag.utils import EmbeddingFunc
+
     os.makedirs(working_dir, exist_ok=True)
 
     rag = LightRAG(
@@ -222,7 +243,9 @@ def load_corpus_texts(limit: int) -> list[str]:
     return texts
 
 
-async def ingest_corpus(doc_limit: int = 200, working_dir: str = DEFAULT_WORKING_DIR) -> int:
+async def ingest_corpus(
+    doc_limit: int = 200, working_dir: str = DEFAULT_WORKING_DIR
+) -> int:
     rag = None
     try:
         rag = await initialize_rag(working_dir)
@@ -342,7 +365,7 @@ async def query_rag(
         rewritten_question: str,
         *,
         retry_level: int = 0,
-    ) -> QueryParam:
+    ) -> "QueryParam":
         base_top_k = int(os.getenv("TOP_K", "40"))
         base_chunk_top_k = int(os.getenv("CHUNK_TOP_K", "20"))
 
@@ -425,7 +448,9 @@ async def query_rag(
             if verdict in {"supported", ""} or not isinstance(unsupported_claims, list):
                 return ""
 
-            cleaned_claims = [str(c).strip() for c in unsupported_claims if str(c).strip()][:5]
+            cleaned_claims = [
+                str(c).strip() for c in unsupported_claims if str(c).strip()
+            ][:5]
             if not cleaned_claims:
                 return ""
 
@@ -464,7 +489,9 @@ async def query_rag(
                 break
 
         if selected_result is None:
-            return "I do not have enough information to answer from the retrieved corpus."
+            return (
+                "I do not have enough information to answer from the retrieved corpus."
+            )
 
         answer_text = _extract_llm_text(selected_result)
         references = _extract_references(selected_result)
@@ -481,7 +508,9 @@ async def query_rag(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="LightRAG over the Chomsky corpus")
-    parser.add_argument("--ingest", action="store_true", help="Index dataset into LightRAG")
+    parser.add_argument(
+        "--ingest", action="store_true", help="Index dataset into LightRAG"
+    )
     parser.add_argument("--query", type=str, help="Question to ask")
     parser.add_argument(
         "--mode",
@@ -490,7 +519,9 @@ def parse_args() -> argparse.Namespace:
         choices=["naive", "local", "global", "hybrid", "mix"],
         help="LightRAG query mode",
     )
-    parser.add_argument("--doc-limit", type=int, default=200, help="How many docs to index")
+    parser.add_argument(
+        "--doc-limit", type=int, default=200, help="How many docs to index"
+    )
     parser.add_argument(
         "--working-dir",
         type=str,
@@ -502,11 +533,15 @@ def parse_args() -> argparse.Namespace:
 
 async def run_cli(args: argparse.Namespace) -> None:
     if args.ingest:
-        count = await ingest_corpus(doc_limit=args.doc_limit, working_dir=args.working_dir)
+        count = await ingest_corpus(
+            doc_limit=args.doc_limit, working_dir=args.working_dir
+        )
         print(f"Indexed {count} documents into LightRAG store: {args.working_dir}")
 
     if args.query:
-        answer = await query_rag(args.query, mode=args.mode, working_dir=args.working_dir)
+        answer = await query_rag(
+            args.query, mode=args.mode, working_dir=args.working_dir
+        )
         print(f"\nQ: {args.query}")
         print(f"\nA: {answer}")
 
@@ -516,4 +551,3 @@ async def run_cli(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     asyncio.run(run_cli(parse_args()))
-
