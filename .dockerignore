@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+lightrag_store/
+.git/
+.DS_Store
+.env
+frontend/.env.local

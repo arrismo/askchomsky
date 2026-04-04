@@ -3,12 +3,17 @@
 import { useCallback, useRef, useState } from "react";
 import type { NodeState, StageEvent } from "@/types/pipeline";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ??
+  (typeof window !== "undefined" && window.location.origin !== "http://localhost:3000"
+    ? window.location.origin
+    : "http://localhost:8001");
 
 // Default idle nodes shown before any query is run
 const DEFAULT_NODES: NodeState[] = [
   { id: "intent", label: "Intent Router", status: "idle", detail: "" },
   { id: "rewrite", label: "Query Rewrite", status: "idle", detail: "" },
+  { id: "cache", label: "Cache Check", status: "idle", detail: "" },
   { id: "rag_init", label: "Loading RAG Store", status: "idle", detail: "" },
   { id: "retrieval_1", label: "Retrieval", status: "idle", detail: "" },
   { id: "retrieval_2", label: "Retrieval (retry)", status: "idle", detail: "" },

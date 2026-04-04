@@ -34,9 +34,10 @@ from pydantic import BaseModel
 from main import (
     CITATION_SYSTEM_PROMPT,
     DEFAULT_WORKING_DIR,
+    cache_answer,
+    get_cached_answer,
     initialize_rag,
     llm_model_func,
-    query_rag,
 )
 
 # ---------------------------------------------------------------------------
@@ -544,6 +545,14 @@ async def _stream_pipeline(
             detail=f"Original: {question}\n\nRewritten: {rewritten}",
         )
 
+        # ── Stage: Cache Check ───────────────────────────────────────────
+        mode = mode_override or os.getenv("CHAINLIT_MODE") or "hybrid"
+        cached = get_cached_answer(question, mode)
+        if cached is not None:
+            yield _stage_event("cache", "Cache", "done", detail="Served from cache")
+            yield _sse("done", {"answer": cached})
+            return
+
         # ── Stage: RAG Init ──────────────────────────────────────────────
         yield _stage_event("rag_init", "Loading RAG Store", "running")
         # RAG_WORKING_DIR controls where the LightRAG index is stored.
@@ -729,6 +738,9 @@ async def _stream_pipeline(
 
         yield _sse("done", done_payload)
 
+        # Cache the final answer
+        cache_answer(question, mode, final)
+
     except Exception as exc:
         yield _stage_event("answer", "Answer", "error", detail=str(exc))
         yield _sse("error", {"message": str(exc)})
@@ -802,3 +814,27 @@ async def compare(req: CompareRequest) -> dict:
         "mode_b": mode_b,
         "answer_b": answer_b,
     }
+
+
+# ---------------------------------------------------------------------------
+# Serve Next.js static build (production)
+# ---------------------------------------------------------------------------
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+NEXTJS_OUT = os.path.join(PROJECT_ROOT, "frontend", "out")
+
+if os.path.isdir(NEXTJS_OUT):
+    app.mount(
+        "/_next", StaticFiles(directory=os.path.join(NEXTJS_OUT, "_next")), name="_next"
+    )
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        file_path = os.path.join(NEXTJS_OUT, full_path, "index.html")
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_path = os.path.join(NEXTJS_OUT, "index.html")
+        if os.path.isfile(index_path):
+            return FileResponse(index_path)
+        return {"error": "Not found"}

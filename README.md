@@ -1,12 +1,23 @@
-# askchomsky
+---
+title: AskChomsky
+emoji: 🧠
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+---
 
-AskChomsky is a retrieval-augmented chatbot over a Noam Chomsky corpus.
+# AskChomsky
+
+Ask questions about Noam Chomsky's work, grounded in a curated corpus with citations.
+
+Powered by LightRAG + Next.js.
 
 ## Run Locally
 
 ### Prerequisites
 
-- Python 3.14+
+- Python 3.11+
 - Node.js 20+
 - npm
 
@@ -74,8 +85,8 @@ Notes:
 
 - LightRAG (retrieval-augmented generation)
 - LlamaIndex (RAG orchestration)
-- HuggingFace embeddings: `BAAI/bge-base-en-v1.5`
-- Model for answer generation: `openai/gpt-oss-120b`
+- OpenAI embeddings: `openai/text-embedding-3-small` (via OpenRouter)
+- Model for answer generation: `openai/gpt-4o-mini`
 - Langfuse (observability and traces)
 
 ## Dataset Used
@@ -107,7 +118,41 @@ python ask.py --query "How does Chomsky connect corporate power to public discou
 Notes:
 
 - LightRAG uses your OpenRouter key from `.env` (`openrouter_key`) for answer generation.
-- This setup uses local embeddings with `BAAI/bge-base-en-v1.5`.
 - Available query modes: `naive`, `local`, `global`, `hybrid`, `mix`.
- - In production you can set `RAG_WORKING_DIR` to control where the LightRAG index is stored
-   (the backend uses `RAG_WORKING_DIR` or defaults to `./lightrag_store`).
+- In production you can set `RAG_WORKING_DIR` to control where the LightRAG index is stored
+  (the backend uses `RAG_WORKING_DIR` or defaults to `./lightrag_store`).
+- Identical queries are cached by default (24h TTL, configurable via `QUERY_CACHE_TTL`).
+
+## Deploy to Hugging Face Spaces
+
+Use the bundled `Dockerfile` when configuring the Space (`sdk: docker` is already declared in this README header).
+
+- **Repository:** Push this project to the Space or set it as the linked Git repository; the build looks for `Dockerfile` at the root.
+- **Secrets:** In the Space settings add `openrouter_key` (and optional `LANGFUSE_*` keys) under *Variables & secrets*; the container refuses to start without an LLM key.
+- **Resources:** The default `INGEST_DOC_LIMIT` is 200; override it in *Environment variables* if you need a smaller corpus for faster cold starts.
+- **Networking:** The app listens on `$PORT` (default `7860`) and serves both the FastAPI backend and the statically exported Next.js frontend from the same origin.
+- **Persistence:** The LightRAG store lives in `/app/lightrag_store`; Spaces reset storage between restarts, so ingestion runs automatically whenever the cache is empty.
+
+After each push Hugging Face rebuilds the image, runs `start.sh`, ingests the corpus if needed, and exposes the UI at the Space URL.
+
+## Secret Scanning (GitGuardian)
+
+This repository ships with a pre-commit hook configuration that runs GitGuardian's `ggshield` scanner on every commit and push.
+
+1. Provision the dedicated security tooling venv (one-time):
+   ```bash
+   python3 -m venv .tools/ggshield
+   .tools/ggshield/bin/python -m pip install --upgrade pip
+   .tools/ggshield/bin/python -m pip install pre-commit ggshield
+   .tools/ggshield/bin/ggshield auth login  # already completed
+   ```
+2. Enable the hooks in your local clone:
+   ```bash
+   .tools/ggshield/bin/pre-commit install --install-hooks
+   ```
+3. (Optional) Run a full scan at any time:
+   ```bash
+   .tools/ggshield/bin/ggshield secret scan repo .
+   ```
+
+Commits that introduce high-risk secrets will be blocked until the secret is removed or revoked.

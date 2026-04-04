@@ -25,6 +25,7 @@ build/
 
 # ── RAG / vector stores (can be large and contain indexed private data) ───
 lightrag_store*/
+.tools/
 
 # ── Generated files ──────────────────────────────────────────────────────
 .files/
@@ -43,3 +44,4 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+AGENTS.md

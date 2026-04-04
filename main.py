@@ -1,11 +1,12 @@
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import re
 import sys
-from functools import lru_cache
+import time
 from typing import Any, TYPE_CHECKING
 
 
@@ -30,12 +31,6 @@ ensure_project_venv()
 import numpy as np
 from datasets import load_dataset
 from dotenv import load_dotenv
-
-if TYPE_CHECKING:
-    # Imported only for type checking; the actual import of
-    # SentenceTransformer happens lazily inside get_embedder to
-    # keep module import (and thus API startup) lightweight.
-    from sentence_transformers import SentenceTransformer
 
 
 load_dotenv()
@@ -80,13 +75,16 @@ configure_logging()
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 LLM_MODEL = os.getenv("ASKCHOMSKY_LLM_MODEL", "openai/gpt-4o-mini")
-EMBED_MODEL = "BAAI/bge-base-en-v1.5"
+EMBED_MODEL = os.getenv("ASKCHOMSKY_EMBED_MODEL", "openai/text-embedding-3-small")
+EMBED_DIM = 1536
 DEFAULT_WORKING_DIR = "./lightrag_store"
 LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT", "600"))
 MAX_ASYNC_LLM_CALLS = int(os.getenv("MAX_ASYNC", "2"))
 MAX_PARALLEL_INSERT = int(os.getenv("MAX_PARALLEL_INSERT", "2"))
 REWRITE_QUERY_ENABLED = os.getenv("REWRITE_QUERY", "true").lower() == "true"
 VERIFY_CLAIMS_ENABLED = os.getenv("VERIFY_CLAIMS", "true").lower() == "true"
+QUERY_CACHE_TTL_SECONDS = int(os.getenv("QUERY_CACHE_TTL", "86400"))
+QUERY_CACHE_PATH = os.path.join(DEFAULT_WORKING_DIR, "query_cache.json")
 
 
 CITATION_SYSTEM_PROMPT = """You are a retrieval-grounded assistant.
@@ -150,26 +148,96 @@ def configure_langfuse() -> bool:
     return get_langfuse_client() is not None
 
 
-@lru_cache(maxsize=1)
-def get_embedder() -> "SentenceTransformer":
-    # Lazy import avoids loading heavy ML stacks during module import,
-    # which helps services like Render bind the HTTP port quickly.
-    from sentence_transformers import SentenceTransformer
+# ---------------------------------------------------------------------------
+# API-based embeddings (OpenRouter / OpenAI-compatible)
+# ---------------------------------------------------------------------------
 
-    return SentenceTransformer(EMBED_MODEL)
+
+def _get_api_key() -> str:
+    api_key = os.getenv("openrouter_key") or os.getenv("OPENAI_API_KEY", "")
+    if not api_key:
+        raise ValueError("Missing openrouter_key or OPENAI_API_KEY in .env")
+    return api_key
+
+
+def _api_embed_single(text: str) -> list[float]:
+    import httpx
+
+    api_key = _get_api_key()
+    payload = {"input": text, "model": EMBED_MODEL}
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(
+            OPENROUTER_BASE_URL + "/embeddings", json=payload, headers=headers
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    return data["data"][0]["embedding"]
 
 
 def embed_texts(texts: list[str]) -> np.ndarray:
-    embeddings = get_embedder().encode(
-        texts,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-    )
-    return np.asarray(embeddings, dtype=np.float32)
+    embeddings = [_api_embed_single(t) for t in texts]
+    arr = np.array(embeddings, dtype=np.float32)
+    norms = np.linalg.norm(arr, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return arr / norms
 
 
 async def embedding_func(texts: list[str]) -> np.ndarray:
     return await asyncio.to_thread(embed_texts, texts)
+
+
+# ---------------------------------------------------------------------------
+# Query result cache (disk-based, TTL-evicted)
+# ---------------------------------------------------------------------------
+
+
+def _load_query_cache() -> dict[str, dict[str, Any]]:
+    if not os.path.exists(QUERY_CACHE_PATH):
+        return {}
+    try:
+        with open(QUERY_CACHE_PATH, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_query_cache(cache: dict[str, dict[str, Any]]) -> None:
+    os.makedirs(os.path.dirname(QUERY_CACHE_PATH), exist_ok=True)
+    with open(QUERY_CACHE_PATH, "w") as f:
+        json.dump(cache, f)
+
+
+def _cache_key(question: str, mode: str) -> str:
+    raw = f"{question.strip().lower()}|{mode}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def get_cached_answer(question: str, mode: str) -> str | None:
+    if QUERY_CACHE_TTL_SECONDS <= 0:
+        return None
+    key = _cache_key(question, mode)
+    cache = _load_query_cache()
+    entry = cache.get(key)
+    if not entry:
+        return None
+    if time.time() - entry.get("ts", 0) > QUERY_CACHE_TTL_SECONDS:
+        del cache[key]
+        _save_query_cache(cache)
+        return None
+    return entry.get("answer")
+
+
+def cache_answer(question: str, mode: str, answer: str) -> None:
+    if QUERY_CACHE_TTL_SECONDS <= 0:
+        return
+    key = _cache_key(question, mode)
+    cache = _load_query_cache()
+    cache[key] = {"answer": answer, "ts": time.time()}
+    _save_query_cache(cache)
 
 
 async def llm_model_func(
@@ -218,7 +286,7 @@ async def initialize_rag(working_dir: str = DEFAULT_WORKING_DIR) -> "LightRAG":
         llm_model_max_async=MAX_ASYNC_LLM_CALLS,
         max_parallel_insert=MAX_PARALLEL_INSERT,
         embedding_func=EmbeddingFunc(
-            embedding_dim=768,
+            embedding_dim=EMBED_DIM,
             max_token_size=8192,
             model_name=EMBED_MODEL,
             func=embedding_func,
@@ -462,6 +530,10 @@ async def query_rag(
         except Exception:
             return ""
 
+    cached = get_cached_answer(question, mode)
+    if cached is not None:
+        return cached
+
     rag = None
     try:
         rag = await initialize_rag(working_dir)
@@ -500,7 +572,9 @@ async def query_rag(
         answer_with_citations = _enforce_citation_answer(answer_text, references)
         verification_summary = await _verify_claims(answer_with_citations, chunks)
 
-        return f"{answer_with_citations}{verification_summary}".strip()
+        final_answer = f"{answer_with_citations}{verification_summary}".strip()
+        cache_answer(question, mode, final_answer)
+        return final_answer
     finally:
         if rag is not None:
             await rag.finalize_storages()

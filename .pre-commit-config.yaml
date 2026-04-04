@@ -1,0 +1,6 @@
+repos:
+  - repo: https://github.com/GitGuardian/ggshield
+    rev: v1.24.0
+    hooks:
+      - id: ggshield
+        stages: [pre-commit, pre-push]

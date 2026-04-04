@@ -29,6 +29,7 @@ interface PipelineNodeDataShape extends Record<string, unknown> {
 const ICONS: Record<string, string> = {
   intent: "🧭",
   rewrite: "✏️",
+  cache: "⚡",
   rag_init: "🗄️",
   retrieval_1: "🔍",
   retrieval_2: "🔄",
@@ -43,6 +44,7 @@ const ICONS: Record<string, string> = {
 const POSITIONS: Record<string, { x: number; y: number }> = {
   intent:       { x: 0, y: 0 },
   rewrite:      { x: 0, y: 160 },
+  cache:        { x: 300, y: 160 },
   rag_init:     { x: 0, y: 320 },
   retrieval_1:  { x: 0, y: 480 },
   retrieval_2:  { x: 300, y: 480 },
@@ -55,7 +57,8 @@ const POSITIONS: Record<string, { x: number; y: number }> = {
 // ── Edge definitions ────────────────────────────────────────────────────────
 const STATIC_EDGES: Edge[] = [
   { id: "e-intent-rewrite",       source: "intent",      target: "rewrite" },
-  { id: "e-rewrite-rag",          source: "rewrite",     target: "rag_init" },
+  { id: "e-rewrite-cache",        source: "rewrite",     target: "cache" },
+  { id: "e-cache-rag",            source: "cache",       target: "rag_init" },
   { id: "e-rag-r1",               source: "rag_init",    target: "retrieval_1" },
   { id: "e-r1-r2",                source: "retrieval_1", target: "retrieval_2" },
   { id: "e-r2-r3",                source: "retrieval_2", target: "retrieval_3" },
