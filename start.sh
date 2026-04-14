@@ -1,17 +1,16 @@
 #!/bin/bash
 set -e
 
-# Respect Space-provided directory + doc limit overrides
-DOC_LIMIT=${INGEST_DOC_LIMIT:-200}
+# Respect Space-provided directory
 PORT=${PORT:-7860}
 RAG_WORKING_DIR=${RAG_WORKING_DIR:-/app/lightrag_store}
 
 mkdir -p "$RAG_WORKING_DIR"
 
 # Ingest corpus if RAG store is empty
-if [ ! -d "$RAG_WORKING_DIR/graphml" ]; then
+if [ ! -f "$RAG_WORKING_DIR/graph_chunk_entity_relation.graphml" ]; then
     echo "Ingesting corpus..."
-    python ask.py --ingest --doc-limit "$DOC_LIMIT" --working-dir "$RAG_WORKING_DIR"
+    python ask.py --ingest --working-dir "$RAG_WORKING_DIR"
     echo "Ingestion complete."
 else
     echo "RAG store found, skipping ingestion."

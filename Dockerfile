@@ -29,6 +29,7 @@ RUN cd frontend && npm install
 
 # Project sources
 COPY frontend/ ./frontend/
+COPY lightrag_store/ ./lightrag_store/
 COPY main.py ask.py start.sh ./
 RUN chmod +x start.sh
 
